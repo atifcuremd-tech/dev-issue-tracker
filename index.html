@@ -62,6 +62,11 @@
   .audit table { min-width: 0; } .audit tbody tr { cursor: default; } .audit tbody tr:hover { background: none; }
   .audit td.k { width: 190px; color: var(--muted); } .audit td.v { white-space: pre-wrap; overflow-wrap: anywhere; }
   .audit td.code { font: 13px/1.5 Consolas, monospace; }
+  .cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; border-bottom: 1px solid var(--line); align-items: center; }
+  .cat { border: 1px solid var(--line); background: var(--card); border-radius: 8px 8px 0 0; padding: 6px 12px; cursor: pointer; white-space: nowrap; font-weight: 600; font-size: 14px; color: var(--text); }
+  .cat .n { font-weight: 400; color: var(--muted); margin-left: 4px; font-size: 13px; }
+  .cat.on { background: var(--blue); border-color: var(--blue); color: #fff; } .cat.on .n { color: #fff; }
+  .cat.act { border-style: dashed; color: var(--blue); }
   .b-passing { color: var(--ok); background: #fff; border: 1px dashed var(--ok); }
   .grid2 { display: grid; grid-template-columns: 170px 1fr; gap: 6px 14px; }
   .grid2 dt { color: var(--muted); } .grid2 dd { margin: 0; overflow-wrap: anywhere; }
@@ -172,12 +177,14 @@ const sortIssues = list => [...list].sort((a, b) =>
 
 // ---------- data ----------
 async function loadAll() {
-  const [members, issues, runs] = await Promise.all([
+  const [members, issues, runs, cats] = await Promise.all([
     rows(sb.from('dev_members').select('*').order('name')),
     rows(sb.from('issues').select('*')),
     rows(sb.from('check_runs').select('*').order('finished', { ascending: false }).limit(1)),
+    rows(sb.from('categories').select('name')),
   ]);
-  Object.assign(S, { members, issues, lastRun: runs[0] || null });
+  const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+  Object.assign(S, { members, issues, lastRun: runs[0] || null, cats: cats.map(c => c.name).sort(natural) });
 }
 
 // ---------- shell ----------
@@ -197,8 +204,8 @@ async function route() {
   if (!S.admin && !activeNames().includes(me())) { renderHeader(false); return renderPickName(); }
   renderHeader(true);
   const [, view, id] = location.hash.split('/');
-  const views = { issues: renderList, issue: () => renderIssue(+id), new: () => renderForm(null), edit: () => renderForm(+id), report: renderReport, settings: renderSettings };
-  if ((view === 'new' || view === 'edit' || view === 'settings') && !S.admin) return (location.hash = '#/issues');
+  const views = { issues: renderList, issue: () => renderIssue(+id), new: () => renderForm(null), edit: () => renderForm(+id), report: renderReport, settings: renderSettings, import: renderImport };
+  if (['new', 'edit', 'settings', 'import'].includes(view) && !S.admin) return (location.hash = '#/issues');
   await (views[view] || renderList)();
   window.scrollTo(0, 0);
 }
@@ -236,9 +243,15 @@ function renderPickName() {
 }
 
 // ---------- issues list ----------
-let listFilter = store.get('dit_filter') || 'active', listQ = '', listRef = '', listPri = '';
+let listFilter = store.get('dit_filter') || 'active', listQ = '', listPri = '', listCat = store.get('dit_cat');
+const NO_TAB = '\u0000none';
 function renderList() {
-  const is = S.issues;
+  if (listCat && listCat !== NO_TAB && !S.cats.includes(listCat)) listCat = '';
+  const inCat = i => !listCat || (listCat === NO_TAB ? !i.category : i.category === listCat);
+  const is = S.issues.filter(inCat);
+  const openIn = c => S.issues.filter(i => i.status !== 'Closed' && (c === NO_TAB ? !i.category : i.category === c)).length;
+  const hasLoose = S.issues.some(i => !i.category);
+  const catBtn = (c, label) => `<button class="cat ${c === listCat ? 'on' : ''}" data-cat="${esc(c)}">${esc(label)}<span class="n">${c ? openIn(c) : S.issues.filter(i => i.status !== 'Closed').length}</span></button>`;
   const groups = {
     active: ['Not closed', i => i.status !== 'Closed'],
     cameback: ['Came back', i => i.came_back && RANK[i.status] === 1],
@@ -250,17 +263,16 @@ function renderList() {
   };
   if (!groups[listFilter]) listFilter = 'active';
   const q = listQ.toLowerCase();
-  const refs = [...new Map(is.filter(i => i.audit?.ref).map(i => [i.audit.ref, i.audit.issue])).entries()];
   const shown = sortIssues(is.filter(groups[listFilter][1])
-    .filter(i => !listRef || (listRef === '-' ? !i.audit : i.audit?.ref === listRef))
     .filter(i => !listPri || i.priority === listPri)
     .filter(i => !q || (i.title + ' ' + i.description + ' ' + i.pages.join(' ')).toLowerCase().includes(q)));
-  $('#main').innerHTML = `<div class="row"><h2>Issues</h2><span class="spacer"></span>${S.admin ? '<a class="btn" href="#/new">Add issue</a>' : ''}</div>
-    <p class="sub">Every website issue sent to dev, with its full history. Came back issues are fixes that broke again.</p>
+  $('#main').innerHTML = `<div class="row"><h2>Issues</h2><span class="spacer"></span>${S.admin ? '<a class="btn ghost" href="#/import">Import</a> <a class="btn" href="#/new">Add issue</a>' : ''}</div>
+    <p class="sub">Every website issue sent to dev, with its full history. Came back issues are fixes that broke again. Numbers on the tabs count issues that are not closed.</p>
+    <div class="cats" role="tablist">${catBtn('', 'All')}${S.cats.map(c => catBtn(c, c)).join('')}${hasLoose ? catBtn(NO_TAB, 'No tab') : ''}
+      ${S.admin ? '<button class="cat act" id="newCat">+ New tab</button>' : ''}</div>
     <div class="chips">${Object.entries(groups).map(([k, [label, fn]]) =>
       `<button class="chip ${k === listFilter ? 'on' : ''} ${k === 'cameback' ? 'amber' : ''}" data-f="${esc(k)}"><b>${is.filter(fn).length}</b><span>${label}</span></button>`).join('')}</div>
     <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Search title, description or page" value="${esc(listQ)}" style="flex:1;max-width:420px" aria-label="Search">
-      ${refs.length ? `<select id="fref" aria-label="Audit issue" style="max-width:340px"><option value="">All audit issues</option>${refs.map(([r, t]) => `<option value="${esc(r)}" ${r === listRef ? 'selected' : ''}>${esc(r)}: ${esc(t.slice(0, 60))}</option>`).join('')}<option value="-" ${listRef === '-' ? 'selected' : ''}>Not from the audit</option></select>` : ''}
       <select id="fpri" aria-label="Priority"><option value="">Any priority</option>${PRIORITIES.map(p => `<option ${p === listPri ? 'selected' : ''}>${p}</option>`).join('')}</select>
       <span class="muted">${shown.length} shown</span></div>
     <div class="tablewrap"><table><thead><tr><th>#</th><th>Issue</th><th>Priority</th><th>Status</th><th>Asked dev</th><th>Came back</th><th>Last fixed</th><th>Last check</th><th>Assigned</th></tr></thead>
@@ -271,10 +283,16 @@ function renderList() {
       <td class="n">${i.last_fixed ? fmtDay(localDay(i.last_fixed)) : ''}</td>
       <td class="n">${i.check_type === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
       <td>${esc(i.assigned_to || '')}</td></tr>`).join('')}</tbody></table>
-    ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : S.admin ? 'No issues yet. Click Add issue to record the first one.' : 'No issues yet.'}</div>`}</div>`;
+    ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : listCat && S.admin ? 'This tab is empty. Click Import to bring issues into it, or Add issue.' : S.admin ? 'No issues yet. Click Add issue or Import.' : 'No issues yet.'}</div>`}</div>`;
   $('#main').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { listFilter = b.dataset.f; store.set('dit_filter', listFilter); renderList(); });
   $('#main').querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) location.hash = '#/issue/' + tr.dataset.id; });
-  if ($('#fref')) $('#fref').onchange = e => { listRef = e.target.value; renderList(); };
+  $('#main').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { listCat = b.dataset.cat; store.set('dit_cat', listCat); renderList(); });
+  if ($('#newCat')) $('#newCat').onclick = guard(async () => {
+    const name = (prompt('Name for the new tab') || '').trim(); if (!name) return;
+    if (name.length > 60) throw new Error('Keep tab names to 60 characters or fewer.');
+    await rpc('add_category', { p_name: name }); await loadAll();
+    listCat = name; store.set('dit_cat', name); renderList(); toast('Tab added. Click Import to fill it.');
+  });
   $('#fpri').onchange = e => { listPri = e.target.value; renderList(); };
   const qi = $('#q'); qi.oninput = () => { listQ = qi.value; const pos = qi.selectionStart; renderList(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
 }
@@ -295,6 +313,7 @@ async function renderIssue(id) {
     <div class="card"><dl class="grid2">
       <dt>${i.audit ? 'Fix for this item' : 'Description'}</dt><dd style="white-space:pre-wrap${/^\s*</.test(i.description) ? ';font:13px/1.5 Consolas,monospace' : ''}">${esc(i.description) || '<span class="muted">None</span>'}</dd>
       <dt>Pages</dt><dd>${i.pages.map(p => `<div><a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a></div>`).join('') || '<span class="muted">None</span>'}</dd>
+      <dt>Tab</dt><dd>${esc(i.category || 'None')}</dd>
       <dt>Assigned to</dt><dd>${esc(i.assigned_to || 'Nobody')}</dd>
       <dt>Last fixed</dt><dd>${i.last_fixed ? fmtTs(i.last_fixed) : '<span class="muted">Never</span>'}</dd>
       <dt>Check</dt><dd><b>${CHECKS[i.check_type]}.</b> ${esc(describeCheck(i))}</dd>
@@ -365,6 +384,8 @@ function renderForm(id) {
       <label class="l" for="desc">Description</label><div><textarea id="desc" maxlength="5000" placeholder="What is wrong, and what fixed looks like">${esc(i?.description)}</textarea></div>
       <label class="l" for="pages">Pages</label><div><textarea id="pages" placeholder="https://www.curemd.com/">${esc((i?.pages || []).join('\n'))}</textarea><p class="hint">One full address per line. The check runs on every page listed.</p></div>
       <label class="l" for="asked">Date asked dev</label><div><input type="date" id="asked" value="${esc(i?.date_asked || today())}" max="${today()}" required><p class="hint">Use the real date you first asked, even if it was months ago.</p></div>
+      <label class="l" for="cat">Tab</label><div><input type="text" id="cat" list="catList" maxlength="60" value="${esc(i?.category ?? (listCat && listCat !== NO_TAB ? listCat : ''))}" placeholder="Pick a tab or type a new name">
+        <datalist id="catList">${S.cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
       <label class="l" for="pri">Priority</label><select id="pri">${opt('', i?.priority || '', 'None')}${PRIORITIES.map(p => opt(p, i?.priority || '')).join('')}</select>
       <label class="l" for="asg">Assigned to</label><select id="asg">${opt('', i?.assigned_to || '', 'Nobody')}${[...new Set([...activeNames(), ...(i?.assigned_to ? [i.assigned_to] : [])])].map(n => opt(n, i?.assigned_to || '')).join('')}</select>
       <label class="l" for="ct">Automatic check</label><div>
@@ -414,9 +435,125 @@ function renderForm(id) {
     } else if (ct === 'meta') {
       cfg.field = $('#field').value; cfg.match = $('#match').value; cfg.expected = $('#expected').value.trim(); if (!cfg.expected) throw new Error('Add the expected text.');
     }
-    const p = { title: $('#title').value.trim(), description: $('#desc').value.trim(), pages, date_asked: $('#asked').value, assigned_to: $('#asg').value, priority: $('#pri').value, check_type: ct, check_config: cfg };
+    const p = { title: $('#title').value.trim(), description: $('#desc').value.trim(), pages, date_asked: $('#asked').value, assigned_to: $('#asg').value, priority: $('#pri').value, category: $('#cat').value.trim(), check_type: ct, check_config: cfg };
     if (i) { await rpc('edit_issue', { p_id: i.id, p }); toast('Saved'); location.hash = '#/issue/' + i.id; }
     else { const newId = await rpc('add_issue', { p }); toast('Issue added'); location.hash = '#/issue/' + newId; }
+  });
+}
+
+// ---------- import (owner) ----------
+// Reads an Excel or CSV file in the browser. Works with the SEO audit layout (title, "Fix:" and "Owner: | Timing: |
+// Approval:" lines above a header row that starts with "#", plus an "Issues & Fixes" summary sheet) and with plain
+// sheets whose first row is the column names.
+const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+const loadXlsx = () => window.XLSX ? Promise.resolve() : new Promise((res, rej) => {
+  const t = document.createElement('script'); t.src = XLSX_URL; t.onload = res;
+  t.onerror = () => rej(new Error('Could not load the spreadsheet reader. Check the internet connection and try again.'));
+  document.head.append(t);
+});
+const cellRows = ws => XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, blankrows: true }).map(r => r.map(c => String(c ?? '').replace(/\r\n?/g, '\n').trim()));
+
+function summaryOf(wb) {   // the "Issues & Fixes" style sheet: one row per issue with an ID column
+  const out = {};
+  for (const n of wb.SheetNames) {
+    const R = cellRows(wb.Sheets[n]); const h = R.findIndex(r => r.includes('ID') && r.includes('Issue'));
+    if (h < 0) continue;
+    for (const r of R.slice(h + 1)) { const d = Object.fromEntries(R[h].map((k, j) => [k, r[j] || ''])); if (/^[A-Z]+\d+$/.test(d.ID)) out[d.ID] = d; }
+  }
+  return out;
+}
+
+function parseSheet(R, sheet, file, summary) {
+  let h = R.findIndex(r => r[0] === '#');
+  if (h < 0) h = R.findIndex(r => r.filter(Boolean).length >= 2 && r.some(c => /url|problem|issue|title|fix|priority|page/i.test(c)));
+  if (h < 0) return [];
+  const hdr = R[h], top = R.slice(0, h).map(r => r.filter(Boolean).join(' ')).filter(Boolean);
+  const ref = /^[A-Z]{1,3}\d+$/.test(sheet.split(' ')[0]) ? sheet.split(' ')[0] : '';
+  const meta = Object.fromEntries([...(top.find(t => /Owner:/.test(t)) || '').matchAll(/(Owner|Timing|Approval):\s*([^|]+)/g)].map(m => [m[1], m[2].trim()]));
+  const first = top[0] && !/^(Fix:|Back to)/.test(top[0]) && !/Owner:/.test(top[0]) ? top[0] : '';
+  const sm = summary[ref] || {};
+  const parent = {
+    ref, issue: sm.Issue || (ref && first.startsWith(ref) ? first.slice(ref.length).trim() : first), source_file: file, tab: sheet,
+    area: sm.Area || ({ T: 'Technical', P: 'Core Web Vitals', O: 'On-page' }[ref[0]] || ''), found: sm['What we found'] || '', why: sm['Why it matters'] || '',
+    fix: sm.Fix || (top.find(t => /^Fix:/.test(t)) || '').replace(/^Fix:\s*/, ''),
+    owner: sm['Owner (role)'] || meta.Owner || '', timing: sm.Timing || meta.Timing || '', approval: sm['Approval needed'] || meta.Approval || '',
+  };
+  const col = re => hdr.findIndex(x => re.test(x));
+  const num = hdr.indexOf('#'), cUrl = col(/^url|location|^page\b|address/i), cWhere = col(/link or label/i) >= 0 ? col(/link or label/i) : col(/^where/i),
+        cProb = col(/^problem|^issue$|^title|change or keep/i), cFix = col(/^fix|correct tag|solution|recommend/i), cPri = col(/priority/i);
+  const items = [];
+  R.slice(h + 1).forEach((r, k) => {
+    if (!r.some(Boolean) || (num >= 0 && !/^\d+$/.test(r[num]))) return;   // blank rows, notes and footnote tables
+    const where = (cUrl >= 0 && r[cUrl]) || (cWhere >= 0 && r[cWhere]) || '';
+    const problem = cProb >= 0 ? r[cProb] : '';
+    if (!where && !problem) return;
+    const short = where.replace(/^https?:\/\/(www\.)?curemd\.com/i, '') || where;
+    let title = [ref, problem, short].filter(Boolean).join(' · ');
+    if (title.length > 200) title = title.slice(0, 197) + '...';
+    items.push({
+      title, description: (cFix >= 0 && r[cFix]) || parent.fix, pages: /^https?:\/\//i.test(where) ? [where] : [],
+      priority: cPri >= 0 ? r[cPri] : '',
+      audit: { ...parent, row_no: num >= 0 ? +r[num] : k + 1, columns: hdr.map((c, j) => [c, r[j] || '']).filter(([c]) => c && c !== '#') },
+    });
+  });
+  return items;
+}
+
+let IMP = null;   // { file, sheets: { name: items[] } }
+function renderImport() {
+  $('#main').innerHTML = `<p><a href="#/issues">All issues</a></p><h2>Import issues</h2>
+    <p class="sub">Bring a sheet of issues into a tab in one go. Works with the SEO audit workbook and with any Excel or CSV sheet whose columns include things like URL, Problem, Fix and Priority.</p>
+    <div class="card"><label for="file"><b>1. Choose the file</b></label><div class="row" style="margin-top:8px"><input type="file" id="file" accept=".xlsx,.xls,.csv"></div></div>
+    <div id="imp"></div>`;
+  $('#file').onchange = guard(async e => {
+    const f = e.target.files[0]; if (!f) return;
+    $('#imp').innerHTML = '<div class="card muted">Reading the file...</div>';
+    await loadXlsx();
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }), summary = summaryOf(wb), sheets = {};
+    for (const n of wb.SheetNames) { if (cellRows(wb.Sheets[n]).some(r => r.includes('ID') && r.includes('Issue'))) continue;   // the summary sheet
+      const items = parseSheet(cellRows(wb.Sheets[n]), n, f.name, summary); if (items.length) sheets[n] = items; }
+    if (!Object.keys(sheets).length) { $('#imp').innerHTML = '<div class="card">No issue rows found in this file. The sheet needs a header row with columns such as URL, Problem, Fix and Priority.</div>'; return; }
+    IMP = { file: f.name, sheets }; renderImportOptions(Object.keys(sheets)[0]);
+  });
+}
+function renderImportOptions(sheet) {
+  const all = IMP.sheets[sheet];
+  const pris = [...new Set(all.map(i => PRIORITIES.includes(i.priority) ? i.priority : '(none)'))].sort((a, b) => PRIORITIES.indexOf(a) - PRIORITIES.indexOf(b));
+  const hc = pris.filter(p => p === 'Critical' || p === 'High');
+  const defaultOn = p => hc.length ? hc.includes(p) : true;
+  const tabName = S.cats.includes(sheet) ? sheet : (listCat && listCat !== NO_TAB ? listCat : sheet);
+  $('#imp').innerHTML = `<div class="card form">
+      <label class="l" for="sheet">2. Sheet</label><select id="sheet">${Object.entries(IMP.sheets).map(([n, its]) => `<option value="${esc(n)}" ${n === sheet ? 'selected' : ''}>${esc(n)} (${its.length} rows)</option>`).join('')}</select>
+      <label class="l" for="itab">3. Into tab</label><div><input type="text" id="itab" list="catList2" maxlength="60" value="${esc(tabName)}">
+        <datalist id="catList2">${S.cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+        <p class="hint">Pick an existing tab or type a new name. Rows already open in that tab are skipped, so importing the same sheet again is safe.</p></div>
+      <span class="l">4. Priorities</span><div class="row">${pris.map(p => `<label><input type="checkbox" name="ipri" value="${esc(p)}" ${defaultOn(p) ? 'checked' : ''}> ${esc(p)} (${all.filter(i => (PRIORITIES.includes(i.priority) ? i.priority : '(none)') === p).length})</label>`).join(' ')}</div>
+      <label class="l" for="idate">5. Date asked dev</label><input type="date" id="idate" value="${today()}" max="${today()}">
+      <span></span><div><p id="icount" style="margin:0 0 8px"></p><button class="btn" id="go">Import</button></div>
+    </div><div class="card"><h3>Preview</h3><div id="iprev"></div></div>`;
+  const chosen = () => { const on = [...document.querySelectorAll('[name=ipri]:checked')].map(x => x.value); return all.filter(i => on.includes(PRIORITIES.includes(i.priority) ? i.priority : '(none)')); };
+  const refresh = () => {
+    const c = chosen();
+    $('#icount').innerHTML = `<b>${c.length}</b> of ${all.length} rows will be imported into <b>${esc($('#itab').value.trim() || '(no tab)')}</b>.`;
+    $('#iprev').innerHTML = c.length ? `<div class="tablewrap"><table style="min-width:0"><thead><tr><th>Issue</th><th>Priority</th><th>Fix</th></tr></thead><tbody>${c.slice(0, 8).map(i =>
+      `<tr><td>${esc(i.title)}</td><td>${prioBadge(i)}</td><td style="white-space:pre-wrap">${esc(i.description.slice(0, 160))}</td></tr>`).join('')}</tbody></table></div>${c.length > 8 ? `<p class="muted">and ${c.length - 8} more</p>` : ''}` : '<p class="muted">Nothing selected.</p>';
+  };
+  $('#sheet').onchange = e => renderImportOptions(e.target.value);
+  document.querySelectorAll('[name=ipri]').forEach(x => x.onchange = refresh); $('#itab').oninput = refresh; refresh();
+  $('#go').onclick = guard(async () => {
+    const items = chosen(), cat = $('#itab').value.trim();
+    if (!cat) throw new Error('Type a tab name.');
+    if (!items.length) throw new Error('Tick at least one priority.');
+    $('#go').disabled = true; let added = 0, skipped = 0;
+    try {
+      for (let k = 0; k < items.length; k += 200) {
+        $('#go').textContent = `Importing ${Math.min(k + 200, items.length)} of ${items.length}...`;
+        const r = await rpc('import_issues', { p_category: cat, p_date: $('#idate').value || today(), p_file: IMP.file, p_items: items.slice(k, k + 200) });
+        added += r.added; skipped += r.skipped;
+      }
+    } finally { $('#go').disabled = false; $('#go').textContent = 'Import'; }
+    toast(`Imported ${added} issue${added === 1 ? '' : 's'} into ${cat}` + (skipped ? `. Skipped ${skipped} already in that tab.` : '.'));
+    listCat = cat; store.set('dit_cat', cat); IMP = null; location.hash = '#/issues';
   });
 }
 
