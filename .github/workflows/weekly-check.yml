@@ -1,0 +1,35 @@
+name: Weekly check
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'   # Mondays 01:00 UTC = 06:00 Pakistan time
+  workflow_dispatch:      # "Run workflow" button on the Actions page
+
+permissions:
+  contents: write         # to commit last-run.txt, which keeps GitHub from switching the schedule off after 60 quiet days
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the check logic
+        run: node check/test.js
+      - name: Check the live site
+        run: node check/run.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      - name: Record the run
+        if: always()
+        run: |
+          [ -f last-run.txt ] || echo "$(date -u +%FT%TZ) run failed, see the Actions log" > last-run.txt
+          git config user.name "weekly-check"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add last-run.txt
+          git commit -m "Weekly check ran" || true
+          git push
