@@ -14,6 +14,13 @@ const pages = {
     <footer class="site"><a href="/moved">M</a></footer><p>We are 25 years old. Ã¢â‚¬â„¢</p></body></html>`,
   '/flaky-links': '<header><a href="/a">A</a><a href="/down">D</a></header>',
   '/a': 'ok', '/b': 'ok', '/c': 'ok',
+  // audit (automatic) checks
+  '/': '<header><a href="/a" role="menuitem"><h4>Menu A</h4></a><a href="/b"><span class="menu-title">B</span></a></header><a href="/moved">old link</a>',
+  '/two-h1': '<html><head><title>Same title here</title></head><body><h1>One</h1><h1>Two</h1><img src="/x.png" width="1" height="1"><img src="/big.png"></body></html>',
+  '/one-h1': '<html><head><title>Same title here</title><link rel="canonical" href=" /one-h1 "></head><body><svg><title>icon</title></svg><h1>One</h1></body></html>',
+  '/uses-missing': '<img src="../assets/missing.png">',
+  '/sitemap.xml': '<urlset><url><loc>BASE/moved</loc></url><url><loc>BASE/a</loc></url><url><loc>BASE/a</loc></url></urlset>',
+  '/big.png': 'x'.repeat(300 * 1024), '/small.png': 'x'.repeat(1000),
 };
 function handler(req, res) {
   const p = req.url;
@@ -98,6 +105,36 @@ function handler(req, res) {
   assert.deepStrictEqual(calls, { 1: 1, 2: 2, 3: 2 }); assert.strictEqual(waits, 1);
   waits = 0; await C.withRetry([{ id: 1 }], async () => ({ result: 'pass' }), async () => { waits++; });
   assert.strictEqual(waits, 0, 'no wait when nothing failed');
+
+  // automatic audit checks: 'fail' means the audit problem is still there
+  pages['/sitemap.xml'] = pages['/sitemap.xml'].replaceAll('BASE', base);
+  const row = (cols, check_type = 'manual') => ({ check_type, pages: [], audit: { columns: Object.entries(cols) } });
+  const audit = async (problem, path, ev = '') => (await C.runIssue(row({ 'URL or location': base + path, Problem: problem, 'Current value / evidence': ev }), f)).result;
+  assert.strictEqual(C.autoProblem(row({ 'URL or location': base + '/', Problem: 'Duplicate H1' })), 'Duplicate H1');
+  assert.strictEqual(C.autoProblem(row({ 'URL or location': base + '/', Problem: 'Page-level claims need a source; Duplicate H1' })), null, 'any part needing a person keeps it by hand');
+  assert.strictEqual(C.autoProblem(row({ 'URL or location': 'Site-wide header and footer', Problem: 'Duplicate H1' })), null, 'needs a real address');
+  assert.strictEqual(C.autoProblem(row({ 'URL or location': base + '/', Problem: 'Duplicate H1' }, 'links')), 'Duplicate H1');
+  assert.strictEqual(await audit('Duplicate H1', '/two-h1'), 'fail');
+  assert.strictEqual(await audit('Duplicate H1', '/one-h1'), 'pass');
+  assert.strictEqual(await audit('Title shared with other pages', '/two-h1', 'Same title as /one-h1'), 'fail');
+  assert.strictEqual(await audit('Title shared with other pages', '/good', 'Same title as /one-h1'), 'pass');
+  assert.strictEqual(await audit('Title under 30 characters', '/good'), 'fail');
+  assert.strictEqual(await audit('Canonical URL padded with spaces', '/one-h1'), 'fail');
+  assert.strictEqual(await audit('No canonical tag', '/one-h1'), 'pass');
+  assert.strictEqual(await audit('Duplicate head tags from the state page template', '/one-h1'), 'pass', 'svg <title> in the body does not count');
+  assert.strictEqual(await audit('Images without dimensions', '/two-h1'), 'fail');
+  assert.strictEqual(await audit('Image over 250 KB', '/big.png', 'used on 1 page(s): /two-h1'), 'fail');
+  assert.strictEqual(await audit('Image over 250 KB', '/big.png', 'used on 1 page(s): /one-h1'), 'pass', 'big file no longer used');
+  assert.strictEqual(await audit('Image over 250 KB', '/small.png'), 'pass');
+  assert.strictEqual(await audit('Broken image or file', '/assets/missing.png', 'Returns 404. Used on 1 page(s): /uses-missing'), 'fail');
+  assert.strictEqual(await audit('Broken image or file', '/assets/missing.png', 'Returns 404. Used on 1 page(s): /good'), 'pass');
+  assert.strictEqual(await audit('Sitemap lists a URL that redirects', '/moved'), 'fail');
+  assert.strictEqual(await audit('Sitemap lists a URL that redirects; Listed twice in the sitemap', '/a'), 'fail', 'second part still broken');
+  assert.strictEqual(await audit('Linked live page missing from the sitemap', '/b'), 'fail');
+  assert.strictEqual(await audit('Internal link points to a URL that redirects (on the homepage)', '/moved', 'Linked from 1 page(s): /'), 'fail');
+  assert.strictEqual(await audit('Internal link points to a URL that redirects', '/moved', 'Linked from: /one-h1'), 'pass');
+  const o8 = async url => (await C.runIssue(row({ 'Link URL': base + url, 'Change or keep': 'Change <h4> to <span class="menu-title">' }), f)).result;
+  assert.strictEqual(await o8('/a'), 'fail'); assert.strictEqual(await o8('/b'), 'pass');
 
   server.close();
   console.log('all checks passed');

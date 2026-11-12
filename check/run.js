@@ -23,7 +23,9 @@ async function api(path, body) {
 
 (async () => {
   const started = new Date().toISOString();
-  const issues = await api('issues?select=id,title,pages,status,check_type,check_config&status=neq.Closed&check_type=neq.manual&order=id');
+  // Only fixes are rechecked: Fixed and Closed issues. Open and In progress are still being worked on.
+  const all = await api('issues?select=id,title,pages,status,check_type,check_config,audit&status=in.(Fixed,Closed)&order=id');
+  const issues = all.filter(i => i.check_type !== 'manual' || C.autoProblem(i));   // audit issues are checked automatically
   console.log(`Checking ${issues.length} issues`);
   const fetchFn = C.makeFetcher();
   const results = await C.withRetry(issues, it => C.runIssue(it, fetchFn), async () => {
