@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dev Issue Tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230F6CBD'/%3E%3Cpath d='M11.5 5.5A4 4 0 1 0 12 9' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M12.5 3v3h-3' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #0F6CBD; --blue-dark: #0B4F8A; --blue-tint: #E8F1FA; --amber: #FFAA00; --amber-bg: #FFF3D6; --amber-text: #8A5300;
+    --bg: #F5F7FA; --card: #FFFFFF; --text: #1F2933; --muted: #6B7785; --line: #E1E6EC;
+    --grey-bg: #EEF1F4; --ok: #1E7B34; --ok-bg: #E3F4E7; --bad: #B42318; --bad-bg: #FDE8E7; --ip: #0B4F8A;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Source Sans 3", system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  header { background: var(--blue); color: #fff; display: flex; align-items: center; gap: 16px; padding: 10px 20px; position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  header h1 { font-size: 19px; margin: 0; font-weight: 700; white-space: nowrap; }
+  #tabs { display: flex; gap: 4px; overflow-x: auto; }
+  .tab { color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 14.5px; white-space: nowrap; opacity: .85; }
+  .tab:hover { background: rgba(255,255,255,.15); opacity: 1; }
+  .tab.on { background: #fff; color: var(--blue); opacity: 1; }
+  #who { font-size: 14px; display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .out { background: transparent; border: 1px solid rgba(255,255,255,.7); color: #fff; border-radius: 6px; padding: 4px 12px; font-weight: 600; cursor: pointer; }
+  .out:hover { background: rgba(255,255,255,.15); }
+  main { padding: 22px 26px; max-width: 1200px; margin: 0 auto; }
+  h2 { margin: 0 0 4px; font-size: 24px; } h3 { margin: 0 0 8px; font-size: 17px; }
+  .sub, .muted { color: var(--muted); } .sub { margin: 0 0 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  input, select, textarea { border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: #fff; min-width: 0; }
+  textarea { width: 100%; min-height: 90px; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+  .btn { background: var(--blue); color: #fff; border: 0; border-radius: 6px; padding: 7px 16px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn:hover { background: var(--blue-dark); }
+  .btn.ghost { background: transparent; color: var(--blue); border: 1px solid var(--blue); }
+  .btn.danger { background: transparent; color: var(--bad); border: 1px solid var(--bad); }
+  button:disabled { opacity: .4; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .spacer { flex: 1; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 14px; cursor: pointer; text-align: left; }
+  .chip b { display: block; font-size: 20px; line-height: 1.1; } .chip span { font-size: 13px; color: var(--muted); }
+  .chip.on { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue-tint); }
+  .chip.amber b { color: var(--amber-text); }
+  .tablewrap { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 860px; }
+  th { background: #1F3864; color: #fff; text-align: left; font-weight: 600; font-size: 14px; padding: 9px 10px; white-space: nowrap; }
+  td { border-top: 1px solid var(--line); padding: 8px 10px; vertical-align: top; }
+  tbody tr { cursor: pointer; } tbody tr:hover { background: var(--blue-tint); }
+  tr.cb td:first-child { box-shadow: inset 4px 0 0 var(--amber); }
+  td.n { white-space: nowrap; color: var(--muted); } td.num { text-align: center; }
+  .badge { display: inline-block; font-weight: 600; font-size: 13px; border-radius: 12px; padding: 2px 10px; white-space: nowrap; }
+  .b-Open { color: var(--muted); background: var(--grey-bg); } .b-Inprogress { color: var(--ip); background: var(--blue-tint); }
+  .b-Fixed { color: var(--ok); background: var(--ok-bg); } .b-Closed { color: var(--muted); background: transparent; border: 1px solid var(--line); }
+  .b-cameback { color: var(--amber-text); background: var(--amber-bg); border: 1px solid var(--amber); }
+  .b-pass { color: var(--ok); background: var(--ok-bg); } .b-fail { color: var(--bad); background: var(--bad-bg); } .b-error { color: var(--muted); background: var(--grey-bg); }
+  .b-passing { color: var(--ok); background: #fff; border: 1px dashed var(--ok); }
+  .grid2 { display: grid; grid-template-columns: 170px 1fr; gap: 6px 14px; }
+  .grid2 dt { color: var(--muted); } .grid2 dd { margin: 0; overflow-wrap: anywhere; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 Consolas, monospace; background: var(--bg); border-radius: 6px; padding: 10px; margin: 6px 0 0; max-height: 320px; overflow: auto; }
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li { border-left: 3px solid var(--line); padding: 4px 0 12px 14px; position: relative; }
+  .tl li::before { content: ''; position: absolute; left: -7px; top: 9px; width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+  .tl li.k-came_back::before { background: var(--amber); } .tl li.k-came_back { border-color: var(--amber); }
+  .tl li.k-status::before { background: var(--blue); } .tl li.k-note::before { background: #fff; border: 2px solid var(--blue); width: 7px; height: 7px; }
+  .tl li.fail::before { background: var(--bad); } .tl li.pass::before { background: var(--ok); }
+  .tl .when { font-size: 13px; color: var(--muted); } .tl .what { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .form { display: grid; grid-template-columns: 170px 1fr; gap: 12px 14px; align-items: start; }
+  .form label.l { padding-top: 7px; font-weight: 600; } .form input[type=text], .form select { width: 100%; max-width: 640px; }
+  .form .hint { color: var(--muted); font-size: 13.5px; margin: 4px 0 0; }
+  .warn { background: var(--amber-bg); border: 1px solid var(--amber); border-radius: 8px; padding: 10px 12px; }
+  .names { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .names span { background: var(--blue-tint); border-radius: 16px; padding: 4px 6px 4px 12px; display: inline-flex; align-items: center; gap: 4px; }
+  .names button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 16px; }
+  .names button:hover { color: var(--bad); }
+  .empty { padding: 30px; text-align: center; color: var(--muted); }
+  .login { max-width: 380px; margin: 60px auto; display: grid; gap: 12px; }
+  .pick { display: flex; flex-wrap: wrap; gap: 8px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1F2933; color: #fff; padding: 10px 18px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10; max-width: 90vw; }
+  .toast.show { opacity: 1; } .toast.err { background: var(--bad); }
+  a { color: var(--blue); }
+  @media (max-width: 760px) {
+    main { padding: 16px; } header { padding: 10px 16px; } #tabs { order: 3; flex-basis: 100%; }
+    .grid2, .form { grid-template-columns: 1fr; } .form label.l { padding-top: 0; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>Dev Issue Tracker</h1>
+  <nav id="tabs"></nav>
+  <span id="who"></span>
+</header>
+<main id="main"></main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// ---------- settings: same Supabase project as the Team Task Tracker ----------
+const SUPABASE_URL = 'https://ybynpkunqhygujfzbidc.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlieW5wa3VucWh5Z3VqZnpiaWRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzMDY5MjMsImV4cCI6MjEwOTg4MjkyM30.TyfdxboPGwk668bVTAMXQMJeblRpgGoZ5dYsefCd4TA';
+const DEV_EMAIL = 'devtracker@curemd.com';     // shared dev team login; must match di_role() in setup.sql
+const ADMIN_EMAIL = 'trackeradmin@curemd.com'; // the owner's login; must match di_role() in setup.sql
+// Own storage key: both apps live on the same github.io address, so they must not share a saved login.
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storageKey: 'dev-issue-tracker-auth' } });
+
+// ---------- helpers ----------
+const $ = (s, el = document) => el.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtDay = iso => { if (!iso) return ''; const [y, m, d] = iso.slice(0, 10).split('-'); return `${+d} ${MONTHS[m - 1]} ${y}`; };
+const fmtTs = ts => { if (!ts) return ''; const d = new Date(ts); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const localDay = ts => { const d = new Date(ts); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const today = () => localDay(Date.now());
+const store = { get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast show' + (err ? ' err' : ''); clearTimeout(t._h); t._h = setTimeout(() => (t.className = 'toast'), err ? 5000 : 2600); }
+async function rpc(fn, args) { const { data, error } = await sb.rpc(fn, args); if (error) throw new Error(error.message); return data; }
+async function rows(q) { const { data, error } = await q; if (error) throw new Error(error.message); return data; }
+const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
+
+// ---------- state ----------
+let S = { admin: false, members: [], issues: [], lastRun: null };
+const me = () => S.admin ? 'Owner' : store.get('dit_me');
+const activeNames = () => S.members.filter(m => m.active).map(m => m.name);
+const STATUSES = ['Open', 'In progress', 'Fixed', 'Closed'];
+const statusChoices = () => S.admin ? STATUSES : ['Open', 'In progress', 'Fixed'];
+const CHECKS = {
+  manual: 'Manual (check by hand)',
+  links: 'Links in an area must not redirect or break',
+  response: 'Address must respond a certain way',
+  text: 'Page must contain or must not contain text',
+  meta: 'Page title or meta description must match',
+};
+const RESULT = { pass: 'Passed', fail: 'Failed', error: 'Could not check' };
+const internalAddr = u => /^https?:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(u);
+
+function statusBadge(i) {
+  if (i.came_back && i.status !== 'Fixed' && i.status !== 'Closed')
+    return `<span class="badge b-cameback" title="Was fixed, then broke again">Came back</span>${i.status === 'In progress' ? ' <span class="badge b-Inprogress">In progress</span>' : ''}`;
+  return `<span class="badge b-${i.status.replace(/\s/g, '')}">${esc(i.status)}</span>`;
+}
+const passingBadge = i => (i.status === 'Open' || i.status === 'In progress') && i.last_check_result === 'pass' ? ' <span class="badge b-passing" title="The latest check passed. Mark it Fixed if dev has fixed it.">check passing</span>' : '';
+const resultBadge = i => i.last_check_result ? `<span class="badge b-${i.last_check_result}">${RESULT[i.last_check_result]}</span> <span class="muted">${fmtDay(localDay(i.last_check_at))}</span>` : '<span class="muted">Not checked yet</span>';
+
+function describeCheck(i) {
+  const c = i.check_config || {};
+  if (i.check_type === 'links') {
+    const areas = (c.areas || ['page']).map(a => a === 'page' ? 'whole page' : a).join(' and ');
+    return `Every link to the same site in the ${areas} must answer 200 with no redirect.` + (c.exempt?.length ? ` Exempt: ${c.exempt.join(', ')}` : '');
+  }
+  if (i.check_type === 'response') return { '200': 'Each address must answer 200.', gone: 'Each address must answer 404 or 410.', redirect: `Each address must redirect in one hop to ${c.target}.` }[c.expect] || '';
+  if (i.check_type === 'text') return `The page ${c.mode === 'absent' ? 'must not contain' : 'must contain'} "${c.text}" (not case sensitive).`;
+  if (i.check_type === 'meta') return `The ${c.field === 'title' ? 'title' : 'meta description'} must ${c.match === 'contains' ? 'contain' : 'be exactly'} "${c.expected}".`;
+  return 'No automatic check. Shown in the weekly "check by hand" list.';
+}
+
+// Came back first, then open work, then fixed, then closed; newest asked first within each.
+const RANK = { Open: 1, 'In progress': 1, Fixed: 2, Closed: 3 };
+const sortIssues = list => [...list].sort((a, b) =>
+  ((b.came_back && RANK[b.status] === 1) - (a.came_back && RANK[a.status] === 1)) || (RANK[a.status] - RANK[b.status]) || b.date_asked.localeCompare(a.date_asked) || b.id - a.id);
+
+// ---------- data ----------
+async function loadAll() {
+  const [members, issues, runs] = await Promise.all([
+    rows(sb.from('dev_members').select('*').order('name')),
+    rows(sb.from('issues').select('*')),
+    rows(sb.from('check_runs').select('*').order('finished', { ascending: false }).limit(1)),
+  ]);
+  Object.assign(S, { members, issues, lastRun: runs[0] || null });
+}
+
+// ---------- shell ----------
+function renderHeader(signedIn) {
+  const tabs = [['#/issues', 'Issues'], ['#/report', 'Weekly report']];
+  if (S.admin) tabs.push(['#/new', 'Add issue'], ['#/settings', 'Settings']);
+  const cur = '#/' + (location.hash.split('/')[1] || 'issues');
+  $('#tabs').innerHTML = signedIn ? tabs.map(([h, t]) => `<a class="tab ${h === cur ? 'on' : ''}" href="${h}">${t}</a>`).join('') : '';
+  $('#who').innerHTML = signedIn ? `Signed in as <b>${esc(me())}</b> <button type="button" class="out" id="signOut">Sign out</button>` : '';
+}
+
+async function route() {
+  const { data: { session } } = await sb.auth.getSession();
+  S.admin = session?.user.email === ADMIN_EMAIL;
+  if (!session) { renderHeader(false); return renderSignIn(); }
+  try { await loadAll(); } catch (e) { $('#main').innerHTML = `<div class="card">Could not load: ${esc(e.message)}</div>`; return; }
+  if (!S.admin && !activeNames().includes(me())) { renderHeader(false); return renderPickName(); }
+  renderHeader(true);
+  const [, view, id] = location.hash.split('/');
+  const views = { issues: renderList, issue: () => renderIssue(+id), new: () => renderForm(null), edit: () => renderForm(+id), report: renderReport, settings: renderSettings };
+  if ((view === 'new' || view === 'edit' || view === 'settings') && !S.admin) return (location.hash = '#/issues');
+  await (views[view] || renderList)();
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+document.addEventListener('click', guard(async e => {
+  if (e.target.id !== 'signOut') return;
+  store.set('dit_me', '');
+  await sb.auth.signOut();
+  location.hash = ''; location.reload();
+}));
+
+// ---------- sign in ----------
+function renderSignIn() {
+  $('#main').innerHTML = `<form class="card login" id="f"><h2>Sign in</h2>
+    <p class="sub">Use the dev team password. The owner uses their own password in the same box.</p>
+    <input type="password" id="pw" placeholder="Password" autocomplete="current-password" required aria-label="Password">
+    <button class="btn">Sign in</button></form>`;
+  $('#pw').focus();
+  $('#f').onsubmit = guard(async e => {
+    e.preventDefault();
+    const password = $('#pw').value;
+    let { error } = await sb.auth.signInWithPassword({ email: DEV_EMAIL, password });
+    if (error && error.status === 400) ({ error } = await sb.auth.signInWithPassword({ email: ADMIN_EMAIL, password }));
+    if (error) throw new Error(error.status === 400 ? 'Wrong password.' : error.message);
+    route();
+  });
+}
+function renderPickName() {
+  const names = activeNames();
+  $('#main').innerHTML = `<div class="card login"><h2>Who are you?</h2>
+    <p class="sub">Your name goes on every change you make.</p>
+    ${names.length ? `<div class="pick">${names.map(n => `<button class="btn ghost" data-n="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : '<p>No dev names yet. Ask the owner to add yours in Settings.</p>'}
+    <button type="button" class="out" id="signOut" style="color:var(--blue);border-color:var(--line)">Sign out</button></div>`;
+  $('#main').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { store.set('dit_me', b.dataset.n); route(); });
+}
+
+// ---------- issues list ----------
+let listFilter = store.get('dit_filter') || 'active', listQ = '';
+function renderList() {
+  const is = S.issues;
+  const groups = {
+    active: ['Not closed', i => i.status !== 'Closed'],
+    cameback: ['Came back', i => i.came_back && RANK[i.status] === 1],
+    Open: ['Open', i => i.status === 'Open'],
+    'In progress': ['In progress', i => i.status === 'In progress'],
+    Fixed: ['Fixed', i => i.status === 'Fixed'],
+    Closed: ['Closed', i => i.status === 'Closed'],
+    all: ['All', () => true],
+  };
+  if (!groups[listFilter]) listFilter = 'active';
+  const q = listQ.toLowerCase();
+  const shown = sortIssues(is.filter(groups[listFilter][1]).filter(i => !q || (i.title + ' ' + i.description + ' ' + i.pages.join(' ')).toLowerCase().includes(q)));
+  $('#main').innerHTML = `<div class="row"><h2>Issues</h2><span class="spacer"></span>${S.admin ? '<a class="btn" href="#/new">Add issue</a>' : ''}</div>
+    <p class="sub">Every website issue sent to dev, with its full history. Came back issues are fixes that broke again.</p>
+    <div class="chips">${Object.entries(groups).map(([k, [label, fn]]) =>
+      `<button class="chip ${k === listFilter ? 'on' : ''} ${k === 'cameback' ? 'amber' : ''}" data-f="${esc(k)}"><b>${is.filter(fn).length}</b><span>${label}</span></button>`).join('')}</div>
+    <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Search title, description or page" value="${esc(listQ)}" style="flex:1;max-width:420px" aria-label="Search"></div>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Issue</th><th>Status</th><th>Asked dev</th><th>Came back</th><th>Last fixed</th><th>Last check</th><th>Assigned</th></tr></thead>
+    <tbody>${shown.map(i => `<tr data-id="${i.id}" class="${i.came_back && RANK[i.status] === 1 ? 'cb' : ''}">
+      <td class="n">${i.id}</td><td><a href="#/issue/${i.id}">${esc(i.title)}</a>${i.pages[0] ? `<div class="muted" style="font-size:13px">${esc(i.pages[0])}${i.pages.length > 1 ? ` and ${i.pages.length - 1} more` : ''}</div>` : ''}</td>
+      <td>${statusBadge(i)}${passingBadge(i)}</td><td class="n">${fmtDay(i.date_asked)}</td>
+      <td class="num">${i.times_came_back ? `<b>${i.times_came_back}</b>` : '<span class="muted">0</span>'}</td>
+      <td class="n">${i.last_fixed ? fmtDay(localDay(i.last_fixed)) : ''}</td>
+      <td class="n">${i.check_type === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
+      <td>${esc(i.assigned_to || '')}</td></tr>`).join('')}</tbody></table>
+    ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : S.admin ? 'No issues yet. Click Add issue to record the first one.' : 'No issues yet.'}</div>`}</div>`;
+  $('#main').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { listFilter = b.dataset.f; store.set('dit_filter', listFilter); renderList(); });
+  $('#main').querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) location.hash = '#/issue/' + tr.dataset.id; });
+  const qi = $('#q'); qi.oninput = () => { listQ = qi.value; const pos = qi.selectionStart; renderList(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
+}
+
+// ---------- one issue ----------
+const EVENT_LABEL = { created: 'Raised', status: 'Status', note: 'Note', edit: 'Edited', hand_check: 'Hand check', check: 'Weekly check', came_back: 'Came back' };
+async function renderIssue(id) {
+  const i = S.issues.find(x => x.id === id);
+  if (!i) { $('#main').innerHTML = '<div class="card">Issue not found. It may have been deleted.</div>'; return; }
+  const events = await rows(sb.from('issue_events').select('*').eq('issue_id', id).order('at', { ascending: false }).order('id', { ascending: false }));
+  const fixes = events.filter(e => e.kind === 'status' && / to Fixed$/.test(e.detail)).length;
+  const closed = i.status === 'Closed';
+  const lockedForMe = closed && !S.admin;
+  $('#main').innerHTML = `<p><a href="#/issues">All issues</a></p>
+    <div class="row"><h2>#${i.id} ${esc(i.title)}</h2><span class="spacer"></span>
+      ${S.admin ? `<a class="btn ghost" href="#/edit/${i.id}">Edit</a>${events.length <= 1 ? '<button class="btn danger" id="del">Delete</button>' : ''}` : ''}</div>
+    <p class="sub">${statusBadge(i)}${passingBadge(i)} &nbsp;Asked dev on ${fmtDay(i.date_asked)}. Fixed ${fixes} time${fixes === 1 ? '' : 's'}, came back ${i.times_came_back} time${i.times_came_back === 1 ? '' : 's'}.</p>
+    <div class="card"><dl class="grid2">
+      <dt>Description</dt><dd style="white-space:pre-wrap">${esc(i.description) || '<span class="muted">None</span>'}</dd>
+      <dt>Pages</dt><dd>${i.pages.map(p => `<div><a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a></div>`).join('') || '<span class="muted">None</span>'}</dd>
+      <dt>Assigned to</dt><dd>${esc(i.assigned_to || 'Nobody')}</dd>
+      <dt>Last fixed</dt><dd>${i.last_fixed ? fmtTs(i.last_fixed) : '<span class="muted">Never</span>'}</dd>
+      <dt>Check</dt><dd><b>${CHECKS[i.check_type]}.</b> ${esc(describeCheck(i))}</dd>
+      <dt>Last check</dt><dd>${i.last_check_result ? `<span class="badge b-${i.last_check_result}">${RESULT[i.last_check_result]}</span> ${fmtTs(i.last_check_at)}${i.last_check_detail ? `<pre>${esc(i.last_check_detail)}</pre>` : ''}` : '<span class="muted">Not checked yet</span>'}</dd>
+    </dl></div>
+    <div class="card"><h3>Update</h3>
+      ${lockedForMe ? '<p class="muted">This issue is closed. Only the owner can reopen it.</p>' : `
+      <div class="row" style="margin-bottom:12px"><label for="st"><b>Status</b></label>
+        <select id="st">${(statusChoices().includes(i.status) ? statusChoices() : [i.status, ...statusChoices()]).map(s => `<option ${s === i.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        <button class="btn" id="saveSt">Save status</button></div>
+      ${closed ? '' : `<div class="row" style="margin-bottom:12px"><b>Checked by hand:</b>
+        <button class="btn ghost" id="hcOk">Still fine</button><button class="btn danger" id="hcBad">Broken</button></div>`}
+      <label for="note"><b>Add a note</b></label>
+      <textarea id="note" placeholder="What was done, what is still left, links to commits or tickets"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" id="addNote">Add note</button></div>`}
+    </div>
+    <div class="card"><h3>History</h3><ul class="tl">${events.map(e => {
+      const res = e.kind === 'check' || e.kind === 'hand_check' ? (/^(Check failed|Checked by hand: broken)/.test(e.detail) ? 'fail' : /^(Check passed|Checked by hand: still fine)/.test(e.detail) ? 'pass' : '') : '';
+      return `<li class="k-${e.kind} ${res}"><div class="when">${fmtTs(e.at)} · ${EVENT_LABEL[e.kind]} · <b>${esc(e.actor)}</b></div><div class="what">${esc(e.detail)}</div></li>`;
+    }).join('')}</ul></div>`;
+  const after = async msg => { toast(msg); await loadAll(); renderIssue(id); };
+  if (!lockedForMe) {
+    $('#saveSt').onclick = guard(async () => { await rpc('set_status', { p_id: id, p_status: $('#st').value, p_actor: me() }); await after('Status saved'); });
+    $('#addNote').onclick = guard(async () => {
+      const t = $('#note').value.trim(); if (!t) return toast('Type a note first.', true);
+      await rpc('add_note', { p_id: id, p_text: t, p_actor: me() }); await after('Note added');
+    });
+    if (!closed) {
+      $('#hcOk').onclick = guard(async () => { await rpc('hand_check', { p_id: id, p_ok: true, p_actor: me() }); await after('Recorded: still fine'); });
+      $('#hcBad').onclick = guard(async () => {
+        if (i.status === 'Fixed' && !confirm('Record it as broken? This reopens the issue and marks it as came back.')) return;
+        await rpc('hand_check', { p_id: id, p_ok: false, p_actor: me() }); await after('Recorded: broken');
+      });
+    }
+  }
+  if ($('#del')) $('#del').onclick = guard(async () => {
+    if (!confirm('Delete this issue? Only for issues entered by mistake.')) return;
+    await rpc('delete_issue', { p_id: id }); toast('Deleted'); location.hash = '#/issues';
+  });
+}
+
+// ---------- add / edit (owner) ----------
+function renderForm(id) {
+  const i = id ? S.issues.find(x => x.id === id) : null;
+  if (id && !i) { $('#main').innerHTML = '<div class="card">Issue not found.</div>'; return; }
+  const c = i?.check_config || {}, type = i?.check_type || 'manual';
+  const opt = (v, cur, label) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label ?? v)}</option>`;
+  const areas = c.areas || ['header', 'footer'];
+  $('#main').innerHTML = `<p><a href="${i ? '#/issue/' + i.id : '#/issues'}">Back</a></p><h2>${i ? 'Edit issue #' + i.id : 'Add issue'}</h2>
+    <p class="sub">${i ? 'Changes are recorded in the history.' : 'Record what dev has been asked to fix.'}</p>
+    <form class="card form" id="f" novalidate>
+      <label class="l" for="title">Title</label><input type="text" id="title" maxlength="200" required value="${esc(i?.title)}" placeholder="Header and footer links redirect">
+      <label class="l" for="desc">Description</label><div><textarea id="desc" maxlength="5000" placeholder="What is wrong, and what fixed looks like">${esc(i?.description)}</textarea></div>
+      <label class="l" for="pages">Pages</label><div><textarea id="pages" placeholder="https://www.curemd.com/">${esc((i?.pages || []).join('\n'))}</textarea><p class="hint">One full address per line. The check runs on every page listed.</p></div>
+      <label class="l" for="asked">Date asked dev</label><div><input type="date" id="asked" value="${esc(i?.date_asked || today())}" max="${today()}" required><p class="hint">Use the real date you first asked, even if it was months ago.</p></div>
+      <label class="l" for="asg">Assigned to</label><select id="asg">${opt('', i?.assigned_to || '', 'Nobody')}${[...new Set([...activeNames(), ...(i?.assigned_to ? [i.assigned_to] : [])])].map(n => opt(n, i?.assigned_to || '')).join('')}</select>
+      <label class="l" for="ct">Automatic check</label><div>
+        <select id="ct">${Object.entries(CHECKS).map(([k, v]) => opt(k, type, v)).join('')}</select>
+        <div id="cfg" style="margin-top:10px"></div><div id="cwarn" class="warn" style="margin-top:10px" hidden>The weekly check runs on GitHub and can't reach office network addresses. Use Manual for pages on staging servers.</div></div>
+      <span></span><div class="row"><button class="btn">${i ? 'Save changes' : 'Add issue'}</button><a class="btn ghost" href="${i ? '#/issue/' + i.id : '#/issues'}">Cancel</a></div>
+    </form>`;
+  const cfgHtml = {
+    manual: () => '<p class="hint">No automatic test. The issue appears in the weekly report under "Check by hand".</p>',
+    links: () => `<div class="row">${[['header', 'Header'], ['footer', 'Footer'], ['page', 'Whole page']].map(([v, l]) => `<label><input type="checkbox" name="area" value="${v}" ${areas.includes(v) ? 'checked' : ''}> ${l}</label>`).join(' ')}</div>
+      <p class="hint">Every link to the same site in these areas must answer 200 directly. Links to other sites are ignored.</p>
+      <label for="exempt"><b>Exempt links</b> (optional, one per line)</label><textarea id="exempt" placeholder="Links that redirect on purpose, such as a login link">${esc((c.exempt || []).join('\n'))}</textarea>`,
+    response: () => `<div class="row"><select id="expect">${opt('200', c.expect || '200', 'Must answer 200 (no redirect)')}${opt('redirect', c.expect, 'Must redirect in one hop to')}${opt('gone', c.expect, 'Must answer 404 or 410 (removed)')}</select>
+      <input type="text" id="target" placeholder="https://www.curemd.com/new-address" value="${esc(c.target)}" style="flex:1"></div><p class="hint">Applies to each address in Pages.</p>`,
+    text: () => `<div class="row"><select id="mode">${opt('absent', c.mode || 'absent', 'Must not contain')}${opt('contains', c.mode, 'Must contain')}</select>
+      <input type="text" id="text" placeholder="Text, for example 25 years" value="${esc(c.text)}" style="flex:1"></div><p class="hint">Looks at the visible text of the page, not case sensitive.</p>`,
+    meta: () => `<div class="row"><select id="field">${opt('title', c.field || 'title', 'Page title')}${opt('description', c.field, 'Meta description')}</select>
+      <select id="match">${opt('exact', c.match || 'exact', 'must be exactly')}${opt('contains', c.match, 'must contain')}</select></div>
+      <input type="text" id="expected" value="${esc(c.expected)}" placeholder="Expected text" style="margin-top:8px">`,
+  };
+  const pageList = () => $('#pages').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const showCfg = () => {
+    $('#cfg').innerHTML = cfgHtml[$('#ct').value]();
+    if ($('#expect')) { const t = () => ($('#target').hidden = $('#expect').value !== 'redirect'); $('#expect').onchange = t; t(); }
+    warn();
+  };
+  const warn = () => ($('#cwarn').hidden = !($('#ct').value !== 'manual' && pageList().some(internalAddr)));
+  $('#ct').onchange = showCfg; $('#pages').oninput = warn; showCfg();
+  $('#f').onsubmit = guard(async e => {
+    e.preventDefault();
+    const pages = pageList(), ct = $('#ct').value;
+    const bad = pages.find(p => !/^https?:\/\/[^\s/]+/i.test(p));
+    if (!$('#title').value.trim()) throw new Error('Add a title.');
+    if (bad) throw new Error(`Not a full web address: ${bad}. Start it with https://`);
+    if (!$('#asked').value) throw new Error('Pick the date you asked dev.');
+    if (ct !== 'manual' && !pages.length) throw new Error('Add at least one page for the check to look at.');
+    const cfg = {};
+    if (ct === 'links') {
+      cfg.areas = [...document.querySelectorAll('[name=area]:checked')].map(x => x.value);
+      if (!cfg.areas.length) throw new Error('Tick at least one area.');
+      cfg.exempt = $('#exempt').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    } else if (ct === 'response') {
+      cfg.expect = $('#expect').value;
+      if (cfg.expect === 'redirect') { cfg.target = $('#target').value.trim(); if (!/^https?:\/\//i.test(cfg.target)) throw new Error('Add the full address it should redirect to.'); }
+    } else if (ct === 'text') {
+      cfg.mode = $('#mode').value; cfg.text = $('#text').value.trim(); if (!cfg.text) throw new Error('Add the text to look for.');
+    } else if (ct === 'meta') {
+      cfg.field = $('#field').value; cfg.match = $('#match').value; cfg.expected = $('#expected').value.trim(); if (!cfg.expected) throw new Error('Add the expected text.');
+    }
+    const p = { title: $('#title').value.trim(), description: $('#desc').value.trim(), pages, date_asked: $('#asked').value, assigned_to: $('#asg').value, check_type: ct, check_config: cfg };
+    if (i) { await rpc('edit_issue', { p_id: i.id, p }); toast('Saved'); location.hash = '#/issue/' + i.id; }
+    else { const newId = await rpc('add_issue', { p }); toast('Issue added'); location.hash = '#/issue/' + newId; }
+  });
+}
+
+// ---------- weekly report ----------
+async function renderReport() {
+  const run = S.lastRun, is = S.issues.filter(i => i.status !== 'Closed');
+  const reopenedEv = run ? await rows(sb.from('issue_events').select('issue_id').eq('kind', 'came_back').eq('actor', 'Weekly check').gte('at', run.started)) : [];
+  const reopenedIds = new Set(reopenedEv.map(e => e.issue_id));
+  const reopened = is.filter(i => reopenedIds.has(i.id));
+  const stillFailing = is.filter(i => i.check_type !== 'manual' && i.last_check_result === 'fail' && !reopenedIds.has(i.id));
+  const passingNotFixed = is.filter(i => RANK[i.status] === 1 && i.last_check_result === 'pass');
+  const couldNot = is.filter(i => i.check_type !== 'manual' && i.last_check_result === 'error');
+  const manual = sortIssues(is.filter(i => i.check_type === 'manual'));
+  const stale = !run || Date.now() - new Date(run.finished) > 8 * 864e5;
+  const list = (arr, extra = () => '') => arr.length ? `<ul>${arr.map(i => `<li><a href="#/issue/${i.id}">#${i.id} ${esc(i.title)}</a> ${statusBadge(i)} ${extra(i)}</li>`).join('')}</ul>` : '<p class="muted">None.</p>';
+  $('#main').innerHTML = `<h2>Weekly report</h2>
+    <p class="sub">The automatic check runs every Monday morning (06:00 Pakistan time) on every issue that is not closed.</p>
+    ${stale ? `<div class="warn" style="margin-bottom:16px">${run ? `The weekly check has not run since ${fmtTs(run.finished)}.` : 'The weekly check has not run yet.'} Open the Actions tab of the GitHub repository to see why, or click Run workflow there to run it now.</div>` : ''}
+    ${run ? `<div class="chips"><div class="chip"><b>${fmtDay(localDay(run.finished))}</b><span>Last run</span></div>
+      <div class="chip"><b>${run.checked}</b><span>Checked</span></div><div class="chip"><b>${run.passed}</b><span>Passed</span></div>
+      <div class="chip"><b>${run.failed}</b><span>Failed</span></div><div class="chip amber"><b>${run.reopened}</b><span>Reopened</span></div>
+      <div class="chip"><b>${run.errors}</b><span>Could not check</span></div></div>` : ''}
+    <div class="card"><h3>Came back in the last run</h3><p class="hint muted">Dev had fixed these. They are broken again.</p>${list(reopened, i => `<span class="muted">came back ${i.times_came_back} time${i.times_came_back === 1 ? '' : 's'}</span>`)}</div>
+    <div class="card"><h3>Still failing</h3><p class="hint muted">Not fixed yet, and the check still fails.</p>${list(stillFailing)}</div>
+    <div class="card"><h3>Check passing, not marked fixed</h3><p class="hint muted">Looks fixed on the live site. Mark it Fixed if dev has done the work.</p>${list(passingNotFixed)}</div>
+    <div class="card"><h3>Could not check</h3><p class="hint muted">The site did not answer properly, so nothing was changed.</p>${list(couldNot)}</div>
+    <div class="card"><h3>Check by hand</h3><p class="hint muted">Issues with no automatic check. Open each one and record the result.</p>
+      ${list(manual, i => `<span class="muted">${i.last_check_at ? 'last checked ' + fmtDay(localDay(i.last_check_at)) : 'never checked'}</span>`)}</div>`;
+}
+
+// ---------- settings (owner) ----------
+function renderSettings() {
+  const act = S.members.filter(m => m.active), old = S.members.filter(m => !m.active);
+  $('#main').innerHTML = `<h2>Settings</h2><p class="sub">Only you can see this page.</p>
+    <div class="card"><h3>Dev team names</h3><p class="hint muted">Dev picks one of these after typing the dev password. Removing a name keeps its history.</p>
+      <div class="names">${act.map(m => `<span>${esc(m.name)} <button title="Remove" aria-label="Remove ${esc(m.name)}" data-rm="${esc(m.name)}">×</button></span>`).join('') || '<span class="muted" style="background:none">No names yet.</span>'}</div>
+      <form class="row" id="addName"><input id="nm" maxlength="80" placeholder="Name" aria-label="New name"><button class="btn">Add</button></form>
+      ${old.length ? `<p class="hint muted" style="margin-top:12px">Removed: ${old.map(m => `${esc(m.name)} <button class="linkbtn" style="border:0;background:none;color:var(--blue);cursor:pointer" data-back="${esc(m.name)}">put back</button>`).join(', ')}</p>` : ''}</div>`;
+  const set = (n, a) => guard(async () => { await rpc('set_dev_member', { p_name: n, p_active: a }); await loadAll(); renderSettings(); });
+  $('#main').querySelectorAll('[data-rm]').forEach(b => b.onclick = set(b.dataset.rm, false));
+  $('#main').querySelectorAll('[data-back]').forEach(b => b.onclick = set(b.dataset.back, true));
+  $('#addName').onsubmit = e => { e.preventDefault(); const n = $('#nm').value.trim(); if (n) set(n, true)(); };
+}
+
+route();
+</script>
+</body>
+</html>
