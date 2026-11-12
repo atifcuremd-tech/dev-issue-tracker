@@ -25,7 +25,25 @@
   #who { font-size: 14px; display: flex; align-items: center; gap: 10px; margin-left: auto; }
   .out { background: transparent; border: 1px solid rgba(255,255,255,.7); color: #fff; border-radius: 6px; padding: 4px 12px; font-weight: 600; cursor: pointer; }
   .out:hover { background: rgba(255,255,255,.15); }
-  main { padding: 22px 26px; max-width: 1200px; margin: 0 auto; }
+  main { padding: 22px 26px; min-width: 0; }
+  .navbtn { background: none; border: 0; color: #fff; width: 34px; height: 34px; border-radius: 6px; cursor: pointer; display: grid; place-items: center; padding: 0; margin-left: -6px; }
+  .navbtn:hover { background: rgba(255,255,255,.15); }
+  .layout { display: grid; grid-template-columns: 250px 1fr; min-height: calc(100vh - 54px); }
+  .layout.collapsed, body.signedout .layout { grid-template-columns: 1fr; }
+  .layout.collapsed #side, body.signedout #side, body.signedout .navbtn { display: none; }
+  #side { background: var(--card); border-right: 1px solid var(--line); padding: 12px 10px; overflow-y: auto; max-height: calc(100vh - 54px); position: sticky; top: 54px; }
+  #side .sec { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 10px 6px; }
+  #side .item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 10px; border: 0; border-radius: 6px; background: none; color: var(--text); text-decoration: none; font-size: 14.5px; text-align: left; cursor: pointer; }
+  #side .item:hover { background: var(--blue-tint); }
+  #side .item.on { background: var(--blue); color: #fff; }
+  #side .item .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #side .item .n { font-size: 12px; background: var(--grey-bg); color: var(--muted); border-radius: 10px; padding: 0 7px; min-width: 22px; text-align: center; }
+  #side .item.on .n { background: rgba(255,255,255,.25); color: #fff; }
+  #side .item .who { font-size: 11px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+  #side .item .who.none { color: var(--muted); font-weight: 400; } #side .item .who.part { color: var(--amber-text); }
+  #side .item.on .who { color: #fff; }
+  #side .item.act { color: var(--blue); font-weight: 600; }
+  .assignbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 14px; }
   h2 { margin: 0 0 4px; font-size: 24px; } h3 { margin: 0 0 8px; font-size: 17px; }
   .sub, .muted { color: var(--muted); } .sub { margin: 0 0 16px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
@@ -62,11 +80,6 @@
   .audit table { min-width: 0; } .audit tbody tr { cursor: default; } .audit tbody tr:hover { background: none; }
   .audit td.k { width: 190px; color: var(--muted); } .audit td.v { white-space: pre-wrap; overflow-wrap: anywhere; }
   .audit td.code { font: 13px/1.5 Consolas, monospace; }
-  .cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; border-bottom: 1px solid var(--line); align-items: center; }
-  .cat { border: 1px solid var(--line); background: var(--card); border-radius: 8px 8px 0 0; padding: 6px 12px; cursor: pointer; white-space: nowrap; font-weight: 600; font-size: 14px; color: var(--text); }
-  .cat .n { font-weight: 400; color: var(--muted); margin-left: 4px; font-size: 13px; }
-  .cat.on { background: var(--blue); border-color: var(--blue); color: #fff; } .cat.on .n { color: #fff; }
-  .cat.act { border-style: dashed; color: var(--blue); }
   .b-passing { color: var(--ok); background: #fff; border: 1px dashed var(--ok); }
   .grid2 { display: grid; grid-template-columns: 170px 1fr; gap: 6px 14px; }
   .grid2 dt { color: var(--muted); } .grid2 dd { margin: 0; overflow-wrap: anywhere; }
@@ -94,18 +107,22 @@
   a { color: var(--blue); }
   @media (max-width: 760px) {
     main { padding: 16px; } header { padding: 10px 16px; } #tabs { order: 3; flex-basis: 100%; }
+    .layout { grid-template-columns: 1fr; }
+    #side { position: static; max-height: none; display: flex; overflow-x: auto; gap: 4px; padding: 8px; border-right: 0; border-bottom: 1px solid var(--line); }
+    #side .sec { display: none; } #side .item { width: auto; white-space: nowrap; } #side .item .lbl { overflow: visible; }
     .grid2, .form { grid-template-columns: 1fr; } .form label.l { padding-top: 0; }
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
-<body>
+<body class="signedout">
 <header>
+  <button type="button" class="navbtn" id="navBtn" aria-label="Show or hide the sidebar" title="Show or hide the sidebar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
   <h1>Dev Issue Tracker</h1>
   <nav id="tabs"></nav>
   <span id="who"></span>
 </header>
-<main id="main"></main>
+<div class="layout"><aside id="side" aria-label="Tabs"></aside><main id="main"></main></div>
 <div class="toast" id="toast" role="status"></div>
 
 <script>
@@ -193,6 +210,7 @@ function renderHeader(signedIn) {
   if (S.admin) tabs.push(['#/new', 'Add issue'], ['#/settings', 'Settings']);
   const cur = '#/' + (location.hash.split('/')[1] || 'issues');
   $('#tabs').innerHTML = signedIn ? tabs.map(([h, t]) => `<a class="tab ${h === cur ? 'on' : ''}" href="${h}">${t}</a>`).join('') : '';
+  document.body.classList.toggle('signedout', !signedIn);
   $('#who').innerHTML = signedIn ? `Signed in as <b>${esc(me())}</b> <button type="button" class="out" id="signOut">Sign out</button>` : '';
 }
 
@@ -204,6 +222,7 @@ async function route() {
   if (!S.admin && !activeNames().includes(me())) { renderHeader(false); return renderPickName(); }
   renderHeader(true);
   const [, view, id] = location.hash.split('/');
+  renderSide(view || 'issues');
   const views = { issues: renderList, issue: () => renderIssue(+id), new: () => renderForm(null), edit: () => renderForm(+id), report: renderReport, settings: renderSettings, import: renderImport };
   if (['new', 'edit', 'settings', 'import'].includes(view) && !S.admin) return (location.hash = '#/issues');
   await (views[view] || renderList)();
@@ -244,14 +263,55 @@ function renderPickName() {
 
 // ---------- issues list ----------
 let listFilter = store.get('dit_filter') || 'active', listQ = '', listPri = '', listCat = store.get('dit_cat');
-const NO_TAB = '\u0000none';
+// Views are kept in the same place as tabs; they start with @@ (plain text, so it survives HTML attributes); tab names are not expected to start with it.
+const NO_TAB = '@@none', V_CB = '@@cameback', V_MINE = '@@mine', V_UNASG = '@@unassigned', TEAM = '@@team';
+const inCat = (i, c = listCat) => !c ? true : c === NO_TAB ? !i.category : c === V_CB ? i.came_back && RANK[i.status] === 1
+  : c === V_MINE ? i.assigned_to === me() : c === V_UNASG ? !i.assigned : i.category === c;
+const notClosed = i => i.status !== 'Closed';
+const visibleCats = () => S.admin ? S.cats : S.cats.filter(c => S.issues.some(i => i.category === c));
+const catLabel = c => ({ '': 'All issues', [NO_TAB]: 'No tab', [V_CB]: 'Came back', [V_MINE]: 'Assigned to me', [V_UNASG]: 'Not assigned' }[c] ?? c);
+const assignLabel = i => i.assigned ? (i.assigned_to || 'Whole dev team') : 'Not assigned';
+// How a tab is assigned, judged on its issues that are not closed: { key: '' | TEAM | name | 'mixed', text }.
+function tabAssign(c) {
+  const open = S.issues.filter(i => i.category === c && notClosed(i));
+  if (!open.length) return { key: null, text: '' };
+  const keys = [...new Set(open.map(i => !i.assigned ? '' : i.assigned_to || TEAM))];
+  if (keys.length > 1) return { key: 'mixed', text: 'Partly' };
+  return { key: keys[0], text: keys[0] === '' ? 'Not assigned' : keys[0] === TEAM ? 'Team' : keys[0] };
+}
+const navCollapsed = () => store.get('dit_nav') === '1';
+$('#navBtn').addEventListener('click', () => { store.set('dit_nav', navCollapsed() ? '' : '1'); route(); });
+function pickCat(c) { listCat = c; store.set('dit_cat', c); if ((location.hash.split('/')[1] || 'issues') === 'issues') { renderList(); renderSide('issues'); } else location.hash = '#/issues'; }
+
+function renderSide(view) {
+  document.querySelector('.layout').classList.toggle('collapsed', navCollapsed());
+  $('#navBtn').setAttribute('aria-expanded', String(!navCollapsed()));
+  const onList = view === 'issues';
+  const item = (c, extra = '') => `<button class="item ${onList && c === listCat ? 'on' : ''}" data-cat="${esc(c)}"><span class="lbl">${esc(catLabel(c))}</span>${extra}<span class="n">${S.issues.filter(i => notClosed(i) && inCat(i, c)).length}</span></button>`;
+  let h = item('') + item(V_CB) + (S.admin ? item(V_UNASG) : item(V_MINE));
+  h += `<div class="sec">Tabs</div>` + visibleCats().map(c => {
+    if (!S.admin) return item(c);
+    const t = tabAssign(c);
+    // unassigned tabs show no label (the Not assigned view lists them), so tab names have room
+    return item(c, t.key ? `<span class="who ${t.key === 'mixed' ? 'part' : ''}" title="Assigned to">${esc(t.text)}</span>` : '');
+  }).join('');
+  if (S.issues.some(i => !i.category)) h += item(NO_TAB);
+  if (S.admin) h += `<button class="item act" id="newCat">+ New tab</button><a class="item act" href="#/import">Import</a>`;
+  $('#side').innerHTML = h;
+  $('#side').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => pickCat(b.dataset.cat));
+  if ($('#newCat')) $('#newCat').onclick = guard(async () => {
+    const name = (prompt('Name for the new tab') || '').trim(); if (!name) return;
+    if (name.length > 60) throw new Error('Keep tab names to 60 characters or fewer.');
+    await rpc('add_category', { p_name: name }); await loadAll();
+    toast('Tab added. Click Import to fill it.'); pickCat(name);
+  });
+}
+
 function renderList() {
-  if (listCat && listCat !== NO_TAB && !S.cats.includes(listCat)) listCat = '';
-  const inCat = i => !listCat || (listCat === NO_TAB ? !i.category : i.category === listCat);
-  const is = S.issues.filter(inCat);
-  const openIn = c => S.issues.filter(i => i.status !== 'Closed' && (c === NO_TAB ? !i.category : i.category === c)).length;
-  const hasLoose = S.issues.some(i => !i.category);
-  const catBtn = (c, label) => `<button class="cat ${c === listCat ? 'on' : ''}" data-cat="${esc(c)}">${esc(label)}<span class="n">${c ? openIn(c) : S.issues.filter(i => i.status !== 'Closed').length}</span></button>`;
+  const allViews = ['', V_CB, S.admin ? V_UNASG : V_MINE, ...visibleCats(), ...(S.issues.some(i => !i.category) ? [NO_TAB] : [])];
+  if (!allViews.includes(listCat)) listCat = '';
+  const is = S.issues.filter(i => inCat(i));
+  const isTab = listCat && !listCat.startsWith('@@');
   const groups = {
     active: ['Not closed', i => i.status !== 'Closed'],
     cameback: ['Came back', i => i.came_back && RANK[i.status] === 1],
@@ -266,10 +326,16 @@ function renderList() {
   const shown = sortIssues(is.filter(groups[listFilter][1])
     .filter(i => !listPri || i.priority === listPri)
     .filter(i => !q || (i.title + ' ' + i.description + ' ' + i.pages.join(' ')).toLowerCase().includes(q)));
-  $('#main').innerHTML = `<div class="row"><h2>Issues</h2><span class="spacer"></span>${S.admin ? '<a class="btn ghost" href="#/import">Import</a> <a class="btn" href="#/new">Add issue</a>' : ''}</div>
-    <p class="sub">Every website issue sent to dev, with its full history. Came back issues are fixes that broke again. Numbers on the tabs count issues that are not closed.</p>
-    <div class="cats" role="tablist">${catBtn('', 'All')}${S.cats.map(c => catBtn(c, c)).join('')}${hasLoose ? catBtn(NO_TAB, 'No tab') : ''}
-      ${S.admin ? '<button class="cat act" id="newCat">+ New tab</button>' : ''}</div>
+  const ta = isTab && S.admin ? tabAssign(listCat) : null, openHere = is.filter(notClosed).length;
+  const asgOpt = (v, label, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`;
+  $('#main').innerHTML = `<div class="row"><h2>${esc(catLabel(listCat))}</h2><span class="spacer"></span>${S.admin ? '<a class="btn ghost" href="#/import">Import</a> <a class="btn" href="#/new">Add issue</a>' : ''}</div>
+    <p class="sub">${S.admin ? 'Every website issue sent to dev, with its full history. Dev only sees issues you have assigned. Came back issues are fixes that broke again.' : 'The issues assigned to the dev team. Came back issues are fixes that broke again.'}</p>
+    ${navCollapsed() ? `<div class="row" style="margin-bottom:12px"><label for="catSel" class="muted">Showing</label><select id="catSel">${allViews.map(c => asgOpt(c, catLabel(c), listCat)).join('')}</select></div>` : ''}
+    ${ta && openHere ? `<div class="card assignbar"><b>Assigned to:</b> <span>${esc(ta.key === 'mixed' ? 'Partly assigned' : ta.text)}</span><span class="spacer"></span>
+      <label for="asgTab" class="muted">Assign this tab to</label>
+      <select id="asgTab">${asgOpt('', 'Not assigned (hidden from dev)', ta.key)}${asgOpt(TEAM, 'Whole dev team', ta.key)}${activeNames().map(n => asgOpt(n, n, ta.key)).join('')}</select>
+      <button class="btn" id="asgGo">Assign tab</button>
+      <span class="hint muted" style="flex-basis:100%;margin:0">Applies to the ${openHere} issue${openHere === 1 ? '' : 's'} in this tab that ${openHere === 1 ? 'is' : 'are'} not closed. Dev only sees assigned issues.</span></div>` : ''}
     <div class="chips">${Object.entries(groups).map(([k, [label, fn]]) =>
       `<button class="chip ${k === listFilter ? 'on' : ''} ${k === 'cameback' ? 'amber' : ''}" data-f="${esc(k)}"><b>${is.filter(fn).length}</b><span>${label}</span></button>`).join('')}</div>
     <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Search title, description or page" value="${esc(listQ)}" style="flex:1;max-width:420px" aria-label="Search">
@@ -282,16 +348,17 @@ function renderList() {
       <td class="num">${i.times_came_back ? `<b>${i.times_came_back}</b>` : '<span class="muted">0</span>'}</td>
       <td class="n">${i.last_fixed ? fmtDay(localDay(i.last_fixed)) : ''}</td>
       <td class="n">${i.check_type === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
-      <td>${esc(i.assigned_to || '')}</td></tr>`).join('')}</tbody></table>
-    ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : listCat && S.admin ? 'This tab is empty. Click Import to bring issues into it, or Add issue.' : S.admin ? 'No issues yet. Click Add issue or Import.' : 'No issues yet.'}</div>`}</div>`;
+      <td>${i.assigned ? esc(i.assigned_to || 'Dev team') : S.admin ? '<span class="muted">Not assigned</span>' : ''}</td></tr>`).join('')}</tbody></table>
+    ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : isTab && S.admin ? 'This tab is empty. Click Import to bring issues into it, or Add issue.' : S.admin ? 'No issues here.' : 'Nothing has been assigned to the dev team here yet.'}</div>`}</div>`;
   $('#main').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { listFilter = b.dataset.f; store.set('dit_filter', listFilter); renderList(); });
   $('#main').querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) location.hash = '#/issue/' + tr.dataset.id; });
-  $('#main').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { listCat = b.dataset.cat; store.set('dit_cat', listCat); renderList(); });
-  if ($('#newCat')) $('#newCat').onclick = guard(async () => {
-    const name = (prompt('Name for the new tab') || '').trim(); if (!name) return;
-    if (name.length > 60) throw new Error('Keep tab names to 60 characters or fewer.');
-    await rpc('add_category', { p_name: name }); await loadAll();
-    listCat = name; store.set('dit_cat', name); renderList(); toast('Tab added. Click Import to fill it.');
+  if ($('#catSel')) $('#catSel').onchange = e => pickCat(e.target.value);
+  if ($('#asgGo')) $('#asgGo').onclick = guard(async () => {
+    const v = $('#asgTab').value, cat = listCat;
+    if (!v && !confirm(`Unassign ${cat}? Dev will no longer see its issues.`)) return;
+    const n = await rpc('assign_category', { p_category: cat, p_assigned: v !== '', p_person: v && v !== TEAM ? v : null });
+    await loadAll(); renderList(); renderSide('issues');
+    toast(n ? `${cat}: ${n} issue${n === 1 ? '' : 's'} ${v === '' ? 'unassigned' : 'assigned to ' + (v === TEAM ? 'the whole dev team' : v)}.` : 'Nothing changed: already assigned that way.');
   });
   $('#fpri').onchange = e => { listPri = e.target.value; renderList(); };
   const qi = $('#q'); qi.oninput = () => { listQ = qi.value; const pos = qi.selectionStart; renderList(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
@@ -314,13 +381,17 @@ async function renderIssue(id) {
       <dt>${i.audit ? 'Fix for this item' : 'Description'}</dt><dd style="white-space:pre-wrap${/^\s*</.test(i.description) ? ';font:13px/1.5 Consolas,monospace' : ''}">${esc(i.description) || '<span class="muted">None</span>'}</dd>
       <dt>Pages</dt><dd>${i.pages.map(p => `<div><a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a></div>`).join('') || '<span class="muted">None</span>'}</dd>
       <dt>Tab</dt><dd>${esc(i.category || 'None')}</dd>
-      <dt>Assigned to</dt><dd>${esc(i.assigned_to || 'Nobody')}</dd>
+      <dt>Assigned to</dt><dd>${esc(assignLabel(i))}${!i.assigned && S.admin ? ' <span class="muted">(hidden from dev)</span>' : ''}</dd>
       <dt>Last fixed</dt><dd>${i.last_fixed ? fmtTs(i.last_fixed) : '<span class="muted">Never</span>'}</dd>
       <dt>Check</dt><dd><b>${CHECKS[i.check_type]}.</b> ${esc(describeCheck(i))}</dd>
       <dt>Last check</dt><dd>${i.last_check_result ? `<span class="badge b-${i.last_check_result}">${RESULT[i.last_check_result]}</span> ${fmtTs(i.last_check_at)}${i.last_check_detail ? `<pre>${esc(i.last_check_detail)}</pre>` : ''}` : '<span class="muted">Not checked yet</span>'}</dd>
     </dl></div>
     ${auditCard(i)}
     <div class="card"><h3>Update</h3>
+      ${S.admin && !closed ? `<div class="row" style="margin-bottom:12px"><label for="asg1"><b>Assigned to</b></label>
+        <select id="asg1">${[['', 'Not assigned (hidden from dev)'], [TEAM, 'Whole dev team'], ...[...new Set([...activeNames(), ...(i.assigned_to ? [i.assigned_to] : [])])].map(n => [n, n])]
+          .map(([v, l]) => `<option value="${esc(v)}" ${v === (!i.assigned ? '' : i.assigned_to || TEAM) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+        <button class="btn" id="saveAsg">Save</button></div>` : ''}
       ${lockedForMe ? '<p class="muted">This issue is closed. Only the owner can reopen it.</p>' : `
       <div class="row" style="margin-bottom:12px"><label for="st"><b>Status</b></label>
         <select id="st">${(statusChoices().includes(i.status) ? statusChoices() : [i.status, ...statusChoices()]).map(s => `<option ${s === i.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
@@ -350,6 +421,10 @@ async function renderIssue(id) {
       });
     }
   }
+  if ($('#saveAsg')) $('#saveAsg').onclick = guard(async () => {
+    const v = $('#asg1').value;
+    await rpc('assign_issues', { p_ids: [id], p_assigned: v !== '', p_person: v && v !== TEAM ? v : null }); await after('Assignment saved');
+  });
   if ($('#del')) $('#del').onclick = guard(async () => {
     if (!confirm('Delete this issue? Only for issues entered by mistake.')) return;
     await rpc('delete_issue', { p_id: id }); toast('Deleted'); location.hash = '#/issues';
@@ -377,6 +452,9 @@ function renderForm(id) {
   const c = i?.check_config || {}, type = i?.check_type || 'manual';
   const opt = (v, cur, label) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label ?? v)}</option>`;
   const areas = c.areas || ['header', 'footer'];
+  const tabNow = i?.category ?? (listCat && !listCat.startsWith('@@') ? listCat : '');
+  const tk = tabNow ? tabAssign(tabNow).key : null;   // a new issue in an assigned tab starts assigned the same way
+  const asgNow = i ? (!i.assigned ? '' : i.assigned_to || TEAM) : (tk && tk !== 'mixed' ? tk : '');
   $('#main').innerHTML = `<p><a href="${i ? '#/issue/' + i.id : '#/issues'}">Back</a></p><h2>${i ? 'Edit issue #' + i.id : 'Add issue'}</h2>
     <p class="sub">${i ? 'Changes are recorded in the history.' : 'Record what dev has been asked to fix.'}</p>
     <form class="card form" id="f" novalidate>
@@ -384,10 +462,11 @@ function renderForm(id) {
       <label class="l" for="desc">Description</label><div><textarea id="desc" maxlength="5000" placeholder="What is wrong, and what fixed looks like">${esc(i?.description)}</textarea></div>
       <label class="l" for="pages">Pages</label><div><textarea id="pages" placeholder="https://www.curemd.com/">${esc((i?.pages || []).join('\n'))}</textarea><p class="hint">One full address per line. The check runs on every page listed.</p></div>
       <label class="l" for="asked">Date asked dev</label><div><input type="date" id="asked" value="${esc(i?.date_asked || today())}" max="${today()}" required><p class="hint">Use the real date you first asked, even if it was months ago.</p></div>
-      <label class="l" for="cat">Tab</label><div><input type="text" id="cat" list="catList" maxlength="60" value="${esc(i?.category ?? (listCat && listCat !== NO_TAB ? listCat : ''))}" placeholder="Pick a tab or type a new name">
+      <label class="l" for="cat">Tab</label><div><input type="text" id="cat" list="catList" maxlength="60" value="${esc(tabNow)}" placeholder="Pick a tab or type a new name">
         <datalist id="catList">${S.cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
       <label class="l" for="pri">Priority</label><select id="pri">${opt('', i?.priority || '', 'None')}${PRIORITIES.map(p => opt(p, i?.priority || '')).join('')}</select>
-      <label class="l" for="asg">Assigned to</label><select id="asg">${opt('', i?.assigned_to || '', 'Nobody')}${[...new Set([...activeNames(), ...(i?.assigned_to ? [i.assigned_to] : [])])].map(n => opt(n, i?.assigned_to || '')).join('')}</select>
+      <label class="l" for="asg">Assigned to</label><div><select id="asg">${opt('', asgNow, 'Not assigned (hidden from dev)')}${opt(TEAM, asgNow, 'Whole dev team')}${[...new Set([...activeNames(), ...(i?.assigned_to ? [i.assigned_to] : [])])].map(n => opt(n, asgNow)).join('')}</select>
+        <p class="hint">Dev only sees issues that are assigned.</p></div>
       <label class="l" for="ct">Automatic check</label><div>
         <select id="ct">${Object.entries(CHECKS).map(([k, v]) => opt(k, type, v)).join('')}</select>
         <div id="cfg" style="margin-top:10px"></div><div id="cwarn" class="warn" style="margin-top:10px" hidden>The weekly check runs on GitHub and can't reach office network addresses. Use Manual for pages on staging servers.</div></div>
@@ -435,7 +514,7 @@ function renderForm(id) {
     } else if (ct === 'meta') {
       cfg.field = $('#field').value; cfg.match = $('#match').value; cfg.expected = $('#expected').value.trim(); if (!cfg.expected) throw new Error('Add the expected text.');
     }
-    const p = { title: $('#title').value.trim(), description: $('#desc').value.trim(), pages, date_asked: $('#asked').value, assigned_to: $('#asg').value, priority: $('#pri').value, category: $('#cat').value.trim(), check_type: ct, check_config: cfg };
+    const p = { title: $('#title').value.trim(), description: $('#desc').value.trim(), pages, date_asked: $('#asked').value, assigned: $('#asg').value !== '', assigned_to: $('#asg').value === TEAM ? '' : $('#asg').value, priority: $('#pri').value, category: $('#cat').value.trim(), check_type: ct, check_config: cfg };
     if (i) { await rpc('edit_issue', { p_id: i.id, p }); toast('Saved'); location.hash = '#/issue/' + i.id; }
     else { const newId = await rpc('add_issue', { p }); toast('Issue added'); location.hash = '#/issue/' + newId; }
   });
@@ -521,12 +600,12 @@ function renderImportOptions(sheet) {
   const pris = [...new Set(all.map(i => PRIORITIES.includes(i.priority) ? i.priority : '(none)'))].sort((a, b) => PRIORITIES.indexOf(a) - PRIORITIES.indexOf(b));
   const hc = pris.filter(p => p === 'Critical' || p === 'High');
   const defaultOn = p => hc.length ? hc.includes(p) : true;
-  const tabName = S.cats.includes(sheet) ? sheet : (listCat && listCat !== NO_TAB ? listCat : sheet);
+  const tabName = S.cats.includes(sheet) ? sheet : (listCat && !listCat.startsWith('@@') ? listCat : sheet);
   $('#imp').innerHTML = `<div class="card form">
       <label class="l" for="sheet">2. Sheet</label><select id="sheet">${Object.entries(IMP.sheets).map(([n, its]) => `<option value="${esc(n)}" ${n === sheet ? 'selected' : ''}>${esc(n)} (${its.length} rows)</option>`).join('')}</select>
       <label class="l" for="itab">3. Into tab</label><div><input type="text" id="itab" list="catList2" maxlength="60" value="${esc(tabName)}">
         <datalist id="catList2">${S.cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
-        <p class="hint">Pick an existing tab or type a new name. Rows already open in that tab are skipped, so importing the same sheet again is safe.</p></div>
+        <p class="hint">Pick an existing tab or type a new name. Rows already open in that tab are skipped, so importing the same sheet again is safe. Imported issues start as not assigned; use Assign tab to hand them to dev.</p></div>
       <span class="l">4. Priorities</span><div class="row">${pris.map(p => `<label><input type="checkbox" name="ipri" value="${esc(p)}" ${defaultOn(p) ? 'checked' : ''}> ${esc(p)} (${all.filter(i => (PRIORITIES.includes(i.priority) ? i.priority : '(none)') === p).length})</label>`).join(' ')}</div>
       <label class="l" for="idate">5. Date asked dev</label><input type="date" id="idate" value="${today()}" max="${today()}">
       <span></span><div><p id="icount" style="margin:0 0 8px"></p><button class="btn" id="go">Import</button></div>
