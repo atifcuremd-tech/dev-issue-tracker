@@ -81,6 +81,11 @@
   .audit td.k { width: 190px; color: var(--muted); } .audit td.v { white-space: pre-wrap; overflow-wrap: anywhere; }
   .audit td.code { font: 13px/1.5 Consolas, monospace; }
   .b-passing { color: var(--ok); background: #fff; border: 1px dashed var(--ok); }
+  select.inl { border: 1px solid transparent; border-radius: 12px; font-weight: 600; font-size: 13px; padding: 2px 4px; cursor: pointer; max-width: 120px; }
+  select.inl:hover { border-color: var(--blue); }
+  select.inl.p-none { color: var(--muted); background: #fff; border-color: var(--line); }
+  select.inl.b-Closed { background: #fff; }
+  select.inl option { background: #fff; color: var(--text); }
   .grid2 { display: grid; grid-template-columns: 170px 1fr; gap: 6px 14px; }
   .grid2 dt { color: var(--muted); } .grid2 dd { margin: 0; overflow-wrap: anywhere; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 Consolas, monospace; background: var(--bg); border-radius: 6px; padding: 10px; margin: 6px 0 0; max-height: 320px; overflow: auto; }
@@ -327,20 +332,24 @@ function renderList() {
     .filter(i => !listPri || i.priority === listPri)
     .filter(i => !q || (i.title + ' ' + i.description + ' ' + i.pages.join(' ')).toLowerCase().includes(q)));
   const ta = isTab && S.admin ? tabAssign(listCat) : null, openHere = is.filter(notClosed).length;
+  const bulk = S.admin ? is : is.filter(notClosed);   // the owner's tab status change includes closed issues, so a closed tab can be reopened
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const asgOpt = (v, label, cur) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`;
   $('#main').innerHTML = `<div class="row"><h2>${esc(catLabel(listCat))}</h2><span class="spacer"></span>${S.admin ? '<a class="btn ghost" href="#/import">Import</a> <a class="btn" href="#/new">Add issue</a>' : ''}</div>
     <p class="sub">${S.admin ? 'Every website issue sent to dev, with its full history. Dev only sees issues you have assigned. Came back issues are fixes that broke again.' : 'The issues assigned to the dev team. Came back issues are fixes that broke again.'}</p>
     ${navCollapsed() ? `<div class="row" style="margin-bottom:12px"><label for="catSel" class="muted">Showing</label><select id="catSel">${allViews.map(c => asgOpt(c, catLabel(c), listCat)).join('')}</select></div>` : ''}
-    ${isTab && openHere ? `<div class="card assignbar">
-      ${ta ? `<b>Assigned to:</b> <span>${esc(ta.key === 'mixed' ? 'Partly assigned' : ta.text)}</span><span class="spacer"></span>
+    ${isTab && bulk.length ? `<div class="card assignbar">
+      ${ta && openHere ? `<b>Assigned to:</b> <span>${esc(ta.key === 'mixed' ? 'Partly assigned' : ta.text)}</span><span class="spacer"></span>
       <label for="asgTab" class="muted">Assign this tab to</label>
       <select id="asgTab">${asgOpt('', 'Not assigned (hidden from dev)', ta.key)}${asgOpt(TEAM, 'Whole dev team', ta.key)}${activeNames().map(n => asgOpt(n, n, ta.key)).join('')}</select>
       <button class="btn" id="asgGo">Assign tab</button><span style="flex-basis:100%"></span>` : ''}
-      <b>Status:</b> <span>${esc([...new Set(is.filter(notClosed).map(i => i.status))].join(', '))}</span><span class="spacer"></span>
+      <b>Status:</b> <span>${esc([...new Set(bulk.map(i => i.status))].join(', '))}</span><span class="spacer"></span>
       <label for="stTab" class="muted">Set status for this tab</label>
       <select id="stTab">${statusChoices().map(st => `<option>${st}</option>`).join('')}</select>
       <button class="btn" id="stGo">Apply to tab</button>
-      <span class="hint muted" style="flex-basis:100%;margin:0">Applies to the ${openHere} issue${openHere === 1 ? '' : 's'} in this tab that ${openHere === 1 ? 'is' : 'are'} not closed. Each change is recorded in that issue's history.${S.admin ? ' Dev only sees assigned issues.' : ''}</span></div>` : ''}
+      <span class="hint muted" style="flex-basis:100%;margin:0">${S.admin
+        ? `Status applies to all ${plural(bulk.length, 'issue', 'issues')} in this tab, closed ones included.${openHere ? ` Assigning applies to the ${plural(openHere, 'issue', 'issues')} not closed.` : ''} Each change is recorded in that issue's history. Dev only sees assigned issues.`
+        : `Applies to the ${plural(bulk.length, 'issue', 'issues')} in this tab that ${bulk.length === 1 ? 'is' : 'are'} not closed. Each change is recorded in that issue's history.`}</span></div>` : ''}
     <div class="chips">${Object.entries(groups).map(([k, [label, fn]]) =>
       `<button class="chip ${k === listFilter ? 'on' : ''} ${k === 'cameback' ? 'amber' : ''}" data-f="${esc(k)}"><b>${is.filter(fn).length}</b><span>${label}</span></button>`).join('')}</div>
     <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Search title, description or page" value="${esc(listQ)}" style="flex:1;max-width:420px" aria-label="Search">
@@ -349,18 +358,27 @@ function renderList() {
     <div class="tablewrap"><table><thead><tr><th>#</th><th>Issue</th><th>Priority</th><th>Status</th><th>Asked dev</th><th>Came back</th><th>Last fixed</th><th>Last check</th><th>Assigned</th></tr></thead>
     <tbody>${shown.map(i => `<tr data-id="${i.id}" class="${i.came_back && RANK[i.status] === 1 ? 'cb' : ''}">
       <td class="n">${i.id}</td><td><a href="#/issue/${i.id}">${esc(i.title)}</a>${i.pages[0] ? `<div class="muted" style="font-size:13px">${esc(i.pages[0])}${i.pages.length > 1 ? ` and ${i.pages.length - 1} more` : ''}</div>` : ''}</td>
-      <td>${prioBadge(i)}</td><td>${statusBadge(i)}${passingBadge(i)}</td><td class="n">${fmtDay(i.date_asked)}</td>
+      <td>${S.admin ? `<select class="inl psel p-${i.priority || 'none'}" data-id="${i.id}" aria-label="Priority of issue ${i.id}">${['', ...PRIORITIES].map(p => `<option value="${p}" ${p === (i.priority || '') ? 'selected' : ''}>${p || 'None'}</option>`).join('')}</select>` : prioBadge(i)}</td>
+      <td style="white-space:nowrap">${(S.admin || i.status !== 'Closed')
+        ? `<select class="inl ssel b-${i.status.replace(/\s/g, '')}" data-id="${i.id}" aria-label="Status of issue ${i.id}">${statusChoices().map(st => `<option ${st === i.status ? 'selected' : ''}>${st}</option>`).join('')}</select>${i.came_back && RANK[i.status] === 1 ? ' <span class="badge b-cameback" title="Was fixed, then broke again">Came back</span>' : ''}`
+        : statusBadge(i)}${passingBadge(i)}</td><td class="n">${fmtDay(i.date_asked)}</td>
       <td class="num">${i.times_came_back ? `<b>${i.times_came_back}</b>` : '<span class="muted">0</span>'}</td>
       <td class="n">${i.last_fixed ? fmtDay(localDay(i.last_fixed)) : ''}</td>
       <td class="n">${i.check_type === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
       <td style="white-space:nowrap">${i.assigned ? esc(i.assigned_to || 'Dev team') : S.admin ? '<span class="muted">Not assigned</span>' : ''}</td></tr>`).join('')}</tbody></table>
     ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : isTab && S.admin ? 'This tab is empty. Click Import to bring issues into it, or Add issue.' : S.admin ? 'No issues here.' : 'Nothing has been assigned to the dev team here yet.'}</div>`}</div>`;
   $('#main').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { listFilter = b.dataset.f; store.set('dit_filter', listFilter); renderList(); });
-  $('#main').querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) location.hash = '#/issue/' + tr.dataset.id; });
+  $('#main').querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if (!e.target.closest('a, select')) location.hash = '#/issue/' + tr.dataset.id; });
+  // Row dropdowns: change priority (owner) or status right in the list; each change is recorded in the issue's history.
+  const rowChange = (sel, fn) => $('#main').querySelectorAll(sel).forEach(s => s.onchange = guard(async () => {
+    try { await fn(+s.dataset.id, s.value); toast(`#${s.dataset.id} saved`); } finally { await loadAll(); renderList(); renderSide('issues'); }
+  }));
+  rowChange('.psel', (id, v) => rpc('set_priority', { p_id: id, p_priority: v }));
+  rowChange('.ssel', (id, v) => rpc('set_status', { p_id: id, p_status: v, p_actor: me() }));
   if ($('#catSel')) $('#catSel').onchange = e => pickCat(e.target.value);
   if ($('#stGo')) $('#stGo').onclick = guard(async () => {
     const st = $('#stTab').value, cat = listCat;
-    if (!confirm(`Set every issue in ${cat} that is not closed to "${st}"? (${openHere} issue${openHere === 1 ? '' : 's'})`)) return;
+    if (!confirm(`Set ${S.admin ? 'every issue' : 'every issue that is not closed'} in ${cat} to "${st}"? (${plural(bulk.length, 'issue', 'issues')})`)) return;
     const n = await rpc('set_status_category', { p_category: cat, p_status: st, p_actor: me() });
     await loadAll(); renderList(); renderSide('issues');
     toast(n ? `${cat}: ${n} issue${n === 1 ? '' : 's'} set to ${st}.` : `Nothing changed: those issues were already ${st}.`);
