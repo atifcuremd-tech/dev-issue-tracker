@@ -331,11 +331,16 @@ function renderList() {
   $('#main').innerHTML = `<div class="row"><h2>${esc(catLabel(listCat))}</h2><span class="spacer"></span>${S.admin ? '<a class="btn ghost" href="#/import">Import</a> <a class="btn" href="#/new">Add issue</a>' : ''}</div>
     <p class="sub">${S.admin ? 'Every website issue sent to dev, with its full history. Dev only sees issues you have assigned. Came back issues are fixes that broke again.' : 'The issues assigned to the dev team. Came back issues are fixes that broke again.'}</p>
     ${navCollapsed() ? `<div class="row" style="margin-bottom:12px"><label for="catSel" class="muted">Showing</label><select id="catSel">${allViews.map(c => asgOpt(c, catLabel(c), listCat)).join('')}</select></div>` : ''}
-    ${ta && openHere ? `<div class="card assignbar"><b>Assigned to:</b> <span>${esc(ta.key === 'mixed' ? 'Partly assigned' : ta.text)}</span><span class="spacer"></span>
+    ${isTab && openHere ? `<div class="card assignbar">
+      ${ta ? `<b>Assigned to:</b> <span>${esc(ta.key === 'mixed' ? 'Partly assigned' : ta.text)}</span><span class="spacer"></span>
       <label for="asgTab" class="muted">Assign this tab to</label>
       <select id="asgTab">${asgOpt('', 'Not assigned (hidden from dev)', ta.key)}${asgOpt(TEAM, 'Whole dev team', ta.key)}${activeNames().map(n => asgOpt(n, n, ta.key)).join('')}</select>
-      <button class="btn" id="asgGo">Assign tab</button>
-      <span class="hint muted" style="flex-basis:100%;margin:0">Applies to the ${openHere} issue${openHere === 1 ? '' : 's'} in this tab that ${openHere === 1 ? 'is' : 'are'} not closed. Dev only sees assigned issues.</span></div>` : ''}
+      <button class="btn" id="asgGo">Assign tab</button><span style="flex-basis:100%"></span>` : ''}
+      <b>Status:</b> <span>${esc([...new Set(is.filter(notClosed).map(i => i.status))].join(', '))}</span><span class="spacer"></span>
+      <label for="stTab" class="muted">Set status for this tab</label>
+      <select id="stTab">${statusChoices().map(st => `<option>${st}</option>`).join('')}</select>
+      <button class="btn" id="stGo">Apply to tab</button>
+      <span class="hint muted" style="flex-basis:100%;margin:0">Applies to the ${openHere} issue${openHere === 1 ? '' : 's'} in this tab that ${openHere === 1 ? 'is' : 'are'} not closed. Each change is recorded in that issue's history.${S.admin ? ' Dev only sees assigned issues.' : ''}</span></div>` : ''}
     <div class="chips">${Object.entries(groups).map(([k, [label, fn]]) =>
       `<button class="chip ${k === listFilter ? 'on' : ''} ${k === 'cameback' ? 'amber' : ''}" data-f="${esc(k)}"><b>${is.filter(fn).length}</b><span>${label}</span></button>`).join('')}</div>
     <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Search title, description or page" value="${esc(listQ)}" style="flex:1;max-width:420px" aria-label="Search">
@@ -348,11 +353,18 @@ function renderList() {
       <td class="num">${i.times_came_back ? `<b>${i.times_came_back}</b>` : '<span class="muted">0</span>'}</td>
       <td class="n">${i.last_fixed ? fmtDay(localDay(i.last_fixed)) : ''}</td>
       <td class="n">${i.check_type === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
-      <td>${i.assigned ? esc(i.assigned_to || 'Dev team') : S.admin ? '<span class="muted">Not assigned</span>' : ''}</td></tr>`).join('')}</tbody></table>
+      <td style="white-space:nowrap">${i.assigned ? esc(i.assigned_to || 'Dev team') : S.admin ? '<span class="muted">Not assigned</span>' : ''}</td></tr>`).join('')}</tbody></table>
     ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : isTab && S.admin ? 'This tab is empty. Click Import to bring issues into it, or Add issue.' : S.admin ? 'No issues here.' : 'Nothing has been assigned to the dev team here yet.'}</div>`}</div>`;
   $('#main').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { listFilter = b.dataset.f; store.set('dit_filter', listFilter); renderList(); });
   $('#main').querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) location.hash = '#/issue/' + tr.dataset.id; });
   if ($('#catSel')) $('#catSel').onchange = e => pickCat(e.target.value);
+  if ($('#stGo')) $('#stGo').onclick = guard(async () => {
+    const st = $('#stTab').value, cat = listCat;
+    if (!confirm(`Set every issue in ${cat} that is not closed to "${st}"? (${openHere} issue${openHere === 1 ? '' : 's'})`)) return;
+    const n = await rpc('set_status_category', { p_category: cat, p_status: st, p_actor: me() });
+    await loadAll(); renderList(); renderSide('issues');
+    toast(n ? `${cat}: ${n} issue${n === 1 ? '' : 's'} set to ${st}.` : `Nothing changed: those issues were already ${st}.`);
+  });
   if ($('#asgGo')) $('#asgGo').onclick = guard(async () => {
     const v = $('#asgTab').value, cat = listCat;
     if (!v && !confirm(`Unassign ${cat}? Dev will no longer see its issues.`)) return;
