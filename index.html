@@ -43,6 +43,11 @@
   #side .item .who.none { color: var(--muted); font-weight: 400; } #side .item .who.part { color: var(--amber-text); }
   #side .item.on .who { color: #fff; }
   #side .item.act { color: var(--blue); font-weight: 600; }
+  .prog .bar { display: flex; height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin-top: 10px; }
+  .prog .bar i { display: block; height: 100%; }
+  .prog .lg { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); }
+  .prog .lg i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; background: var(--line); }
+  .s-Closed { background: var(--blue-dark) !important; } .s-Fixed { background: var(--blue) !important; } .s-Inprogress { background: var(--amber) !important; }
   .assignbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 14px; }
   h2 { margin: 0 0 4px; font-size: 24px; } h3 { margin: 0 0 8px; font-size: 17px; }
   .sub, .muted { color: var(--muted); } .sub { margin: 0 0 16px; }
@@ -72,6 +77,7 @@
   .badge { display: inline-block; font-weight: 600; font-size: 13px; border-radius: 12px; padding: 2px 10px; white-space: nowrap; }
   .b-Open { color: var(--muted); background: var(--grey-bg); } .b-Inprogress { color: var(--ip); background: var(--blue-tint); }
   .b-Fixed { color: var(--ok); background: var(--ok-bg); } .b-Closed { color: var(--muted); background: transparent; border: 1px solid var(--line); }
+  .b-human { color: var(--text); background: #fff; border: 1px dashed var(--muted); font-size: 12px; margin-left: 6px; vertical-align: 1px; }
   .b-cameback { color: var(--amber-text); background: var(--amber-bg); border: 1px solid var(--amber); }
   .b-pass { color: var(--ok); background: var(--ok-bg); } .b-fail { color: var(--bad); background: var(--bad-bg); } .b-error { color: var(--muted); background: var(--grey-bg); }
   .p-Critical { color: #fff; background: var(--bad); } .p-High { color: #fff; background: var(--blue); }
@@ -80,7 +86,6 @@
   .audit table { min-width: 0; } .audit tbody tr { cursor: default; } .audit tbody tr:hover { background: none; }
   .audit td.k { width: 190px; color: var(--muted); } .audit td.v { white-space: pre-wrap; overflow-wrap: anywhere; }
   .audit td.code { font: 13px/1.5 Consolas, monospace; }
-  .b-passing { color: var(--ok); background: #fff; border: 1px dashed var(--ok); }
   select.inl { border: 1px solid transparent; border-radius: 12px; font-weight: 600; font-size: 13px; padding: 2px 4px; cursor: pointer; max-width: 120px; }
   select.inl:hover { border-color: var(--blue); }
   select.inl.p-none { color: var(--muted); background: #fff; border-color: var(--line); }
@@ -119,6 +124,7 @@
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="check/checks.js"></script>
 </head>
 <body class="signedout">
 <header>
@@ -166,6 +172,10 @@ const CHECKS = {
   text: 'Page must contain or must not contain text',
   meta: 'Page title or meta description must match',
 };
+// Audit issues left on Manual are checked automatically for their audit problem (see check/checks.js).
+const ctype = i => i.check_type !== 'manual' ? i.check_type : Checks.autoProblem(i) ? 'auto' : 'manual';
+const checkLabel = t => t === 'auto' ? 'Automatic' : CHECKS[t];
+const humanBadge = i => ctype(i) === 'manual' ? ' <span class="badge b-human" title="The Monday check skips this one. Someone has to check it by hand.">Human check</span>' : '';
 const RESULT = { pass: 'Passed', fail: 'Failed', error: 'Could not check' };
 const internalAddr = u => /^https?:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(u);
 
@@ -174,11 +184,21 @@ function statusBadge(i) {
     return `<span class="badge b-cameback" title="Was fixed, then broke again">Came back</span>${i.status === 'In progress' ? ' <span class="badge b-Inprogress">In progress</span>' : ''}`;
   return `<span class="badge b-${i.status.replace(/\s/g, '')}">${esc(i.status)}</span>`;
 }
-const passingBadge = i => (i.status === 'Open' || i.status === 'In progress') && i.last_check_result === 'pass' ? ' <span class="badge b-passing" title="The latest check passed. Mark it Fixed if dev has fixed it.">check passing</span>' : '';
+// One bar per tab: Closed, Fixed and In progress as parts of the whole; the empty rest is Open.
+function progressBar(is) {
+  const t = is.length, n = s => is.filter(i => i.status === s).length;
+  const parts = [['Closed', n('Closed')], ['Fixed', n('Fixed')], ['In progress', n('In progress')], ['Open', n('Open')]];
+  const done = parts[0][1] + parts[1][1], pct = Math.round(done / t * 100);
+  return `<div class="card prog"><div class="row"><b>Progress</b><span>${done} of ${t} done (${pct}%)</span><span class="spacer"></span>
+      ${parts.map(([s, k]) => `<span class="lg"><i class="s-${s.replace(/\s/g, '')}"></i>${s} ${k}</span>`).join('')}</div>
+    <div class="bar" role="progressbar" aria-label="Issues fixed or closed in this tab" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">${parts.slice(0, 3)
+      .map(([s, k]) => k ? `<i class="s-${s.replace(/\s/g, '')}" style="width:${k / t * 100}%" title="${s}: ${k}"></i>` : '').join('')}</div></div>`;
+}
 const resultBadge = i => i.last_check_result ? `<span class="badge b-${i.last_check_result}">${RESULT[i.last_check_result]}</span> <span class="muted">${fmtDay(localDay(i.last_check_at))}</span>` : '<span class="muted">Not checked yet</span>';
 
 function describeCheck(i) {
   const c = i.check_config || {};
+  if (ctype(i) === 'auto') return `Every Monday the tracker looks for the audit problem "${Checks.autoProblem(i)}" on the live site. The check passes when the problem is gone.`;
   if (i.check_type === 'links') {
     const areas = (c.areas || ['page']).map(a => a === 'page' ? 'whole page' : a).join(' and ');
     return `Every link to the same site in the ${areas} must answer 200 with no redirect.` + (c.exempt?.length ? ` Exempt: ${c.exempt.join(', ')}` : '');
@@ -324,6 +344,7 @@ function renderList() {
     'In progress': ['In progress', i => i.status === 'In progress'],
     Fixed: ['Fixed', i => i.status === 'Fixed'],
     Closed: ['Closed', i => i.status === 'Closed'],
+    human: ['Human check', i => ctype(i) === 'manual'],
     all: ['All', () => true],
   };
   if (!groups[listFilter]) listFilter = 'active';
@@ -338,6 +359,7 @@ function renderList() {
   $('#main').innerHTML = `<div class="row"><h2>${esc(catLabel(listCat))}</h2><span class="spacer"></span>${S.admin ? '<a class="btn ghost" href="#/import">Import</a> <a class="btn" href="#/new">Add issue</a>' : ''}</div>
     <p class="sub">${S.admin ? 'Every website issue sent to dev, with its full history. Dev only sees issues you have assigned. Came back issues are fixes that broke again.' : 'The issues assigned to the dev team. Came back issues are fixes that broke again.'}</p>
     ${navCollapsed() ? `<div class="row" style="margin-bottom:12px"><label for="catSel" class="muted">Showing</label><select id="catSel">${allViews.map(c => asgOpt(c, catLabel(c), listCat)).join('')}</select></div>` : ''}
+    ${isTab && is.length ? progressBar(is) : ''}
     ${isTab && bulk.length ? `<div class="card assignbar">
       ${ta && openHere ? `<b>Assigned to:</b> <span>${esc(ta.key === 'mixed' ? 'Partly assigned' : ta.text)}</span><span class="spacer"></span>
       <label for="asgTab" class="muted">Assign this tab to</label>
@@ -357,14 +379,14 @@ function renderList() {
       <span class="muted">${shown.length} shown</span></div>
     <div class="tablewrap"><table><thead><tr><th>#</th><th>Issue</th><th>Priority</th><th>Status</th><th>Asked dev</th><th>Came back</th><th>Last fixed</th><th>Last check</th><th>Assigned</th></tr></thead>
     <tbody>${shown.map(i => `<tr data-id="${i.id}" class="${i.came_back && RANK[i.status] === 1 ? 'cb' : ''}">
-      <td class="n">${i.id}</td><td><a href="#/issue/${i.id}">${esc(i.title)}</a>${i.pages[0] ? `<div class="muted" style="font-size:13px">${esc(i.pages[0])}${i.pages.length > 1 ? ` and ${i.pages.length - 1} more` : ''}</div>` : ''}</td>
+      <td class="n">${i.id}</td><td><a href="#/issue/${i.id}">${esc(i.title)}</a>${humanBadge(i)}${i.pages[0] ? `<div class="muted" style="font-size:13px">${esc(i.pages[0])}${i.pages.length > 1 ? ` and ${i.pages.length - 1} more` : ''}</div>` : ''}</td>
       <td>${S.admin ? `<select class="inl psel p-${i.priority || 'none'}" data-id="${i.id}" aria-label="Priority of issue ${i.id}">${['', ...PRIORITIES].map(p => `<option value="${p}" ${p === (i.priority || '') ? 'selected' : ''}>${p || 'None'}</option>`).join('')}</select>` : prioBadge(i)}</td>
       <td style="white-space:nowrap">${(S.admin || i.status !== 'Closed')
         ? `<select class="inl ssel b-${i.status.replace(/\s/g, '')}" data-id="${i.id}" aria-label="Status of issue ${i.id}">${statusChoices().map(st => `<option ${st === i.status ? 'selected' : ''}>${st}</option>`).join('')}</select>${i.came_back && RANK[i.status] === 1 ? ' <span class="badge b-cameback" title="Was fixed, then broke again">Came back</span>' : ''}`
-        : statusBadge(i)}${passingBadge(i)}</td><td class="n">${fmtDay(i.date_asked)}</td>
+        : statusBadge(i)}</td><td class="n">${fmtDay(i.date_asked)}</td>
       <td class="num">${i.times_came_back ? `<b>${i.times_came_back}</b>` : '<span class="muted">0</span>'}</td>
       <td class="n">${i.last_fixed ? fmtDay(localDay(i.last_fixed)) : ''}</td>
-      <td class="n">${i.check_type === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
+      <td class="n">${ctype(i) === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
       <td style="white-space:nowrap">${i.assigned ? esc(i.assigned_to || 'Dev team') : S.admin ? '<span class="muted">Not assigned</span>' : ''}</td></tr>`).join('')}</tbody></table>
     ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : isTab && S.admin ? 'This tab is empty. Click Import to bring issues into it, or Add issue.' : S.admin ? 'No issues here.' : 'Nothing has been assigned to the dev team here yet.'}</div>`}</div>`;
   $('#main').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { listFilter = b.dataset.f; store.set('dit_filter', listFilter); renderList(); });
@@ -406,14 +428,14 @@ async function renderIssue(id) {
   $('#main').innerHTML = `<p><a href="#/issues">All issues</a></p>
     <div class="row"><h2>#${i.id} ${esc(i.title)}</h2><span class="spacer"></span>
       ${S.admin ? `<a class="btn ghost" href="#/edit/${i.id}">Edit</a>${events.length <= 1 ? '<button class="btn danger" id="del">Delete</button>' : ''}` : ''}</div>
-    <p class="sub">${prioBadge(i)} ${statusBadge(i)}${passingBadge(i)} &nbsp;Asked dev on ${fmtDay(i.date_asked)}. Fixed ${fixes} time${fixes === 1 ? '' : 's'}, came back ${i.times_came_back} time${i.times_came_back === 1 ? '' : 's'}.</p>
+    <p class="sub">${prioBadge(i)} ${statusBadge(i)}${humanBadge(i)} &nbsp;Asked dev on ${fmtDay(i.date_asked)}. Fixed ${fixes} time${fixes === 1 ? '' : 's'}, came back ${i.times_came_back} time${i.times_came_back === 1 ? '' : 's'}.</p>
     <div class="card"><dl class="grid2">
       <dt>${i.audit ? 'Fix for this item' : 'Description'}</dt><dd style="white-space:pre-wrap${/^\s*</.test(i.description) ? ';font:13px/1.5 Consolas,monospace' : ''}">${esc(i.description) || '<span class="muted">None</span>'}</dd>
       <dt>Pages</dt><dd>${i.pages.map(p => `<div><a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a></div>`).join('') || '<span class="muted">None</span>'}</dd>
       <dt>Tab</dt><dd>${esc(i.category || 'None')}</dd>
       <dt>Assigned to</dt><dd>${esc(assignLabel(i))}${!i.assigned && S.admin ? ' <span class="muted">(hidden from dev)</span>' : ''}</dd>
       <dt>Last fixed</dt><dd>${i.last_fixed ? fmtTs(i.last_fixed) : '<span class="muted">Never</span>'}</dd>
-      <dt>Check</dt><dd><b>${CHECKS[i.check_type]}.</b> ${esc(describeCheck(i))}</dd>
+      <dt>Check</dt><dd><b>${checkLabel(ctype(i))}.</b> ${esc(describeCheck(i))}</dd>
       <dt>Last check</dt><dd>${i.last_check_result ? `<span class="badge b-${i.last_check_result}">${RESULT[i.last_check_result]}</span> ${fmtTs(i.last_check_at)}${i.last_check_detail ? `<pre>${esc(i.last_check_detail)}</pre>` : ''}` : '<span class="muted">Not checked yet</span>'}</dd>
     </dl></div>
     ${auditCard(i)}
@@ -480,6 +502,7 @@ function renderForm(id) {
   const i = id ? S.issues.find(x => x.id === id) : null;
   if (id && !i) { $('#main').innerHTML = '<div class="card">Issue not found.</div>'; return; }
   const c = i?.check_config || {}, type = i?.check_type || 'manual';
+  const auto = i && type === 'manual' && Checks.autoProblem(i);   // audit issue: nothing to set up
   const opt = (v, cur, label) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(label ?? v)}</option>`;
   const areas = c.areas || ['header', 'footer'];
   const tabNow = i?.category ?? (listCat && !listCat.startsWith('@@') ? listCat : '');
@@ -497,9 +520,10 @@ function renderForm(id) {
       <label class="l" for="pri">Priority</label><select id="pri">${opt('', i?.priority || '', 'None')}${PRIORITIES.map(p => opt(p, i?.priority || '')).join('')}</select>
       <label class="l" for="asg">Assigned to</label><div><select id="asg">${opt('', asgNow, 'Not assigned (hidden from dev)')}${opt(TEAM, asgNow, 'Whole dev team')}${[...new Set([...activeNames(), ...(i?.assigned_to ? [i.assigned_to] : [])])].map(n => opt(n, asgNow)).join('')}</select>
         <p class="hint">Dev only sees issues that are assigned.</p></div>
-      <label class="l" for="ct">Automatic check</label><div>
-        <select id="ct">${Object.entries(CHECKS).map(([k, v]) => opt(k, type, v)).join('')}</select>
-        <div id="cfg" style="margin-top:10px"></div><div id="cwarn" class="warn" style="margin-top:10px" hidden>The weekly check runs on GitHub and can't reach office network addresses. Use Manual for pages on staging servers.</div></div>
+      <label class="l" ${auto ? '' : 'for="ct"'}>Automatic check</label><div>
+        ${auto ? `<p class="hint" style="margin-top:6px">Automatic. Every Monday the tracker checks whether "${esc(auto)}" is still on the live site. Nothing to set up.</p>`
+          : `<select id="ct">${Object.entries(CHECKS).map(([k, v]) => opt(k, type, v)).join('')}</select>
+        <div id="cfg" style="margin-top:10px"></div>`}<div id="cwarn" class="warn" style="margin-top:10px" hidden>The weekly check runs on GitHub and can't reach office network addresses. Use Manual for pages on staging servers.</div></div>
       <span></span><div class="row"><button class="btn">${i ? 'Save changes' : 'Add issue'}</button><a class="btn ghost" href="${i ? '#/issue/' + i.id : '#/issues'}">Cancel</a></div>
     </form>`;
   const cfgHtml = {
@@ -522,10 +546,10 @@ function renderForm(id) {
     warn();
   };
   const warn = () => ($('#cwarn').hidden = !($('#ct').value !== 'manual' && pageList().some(internalAddr)));
-  $('#ct').onchange = showCfg; $('#pages').oninput = warn; showCfg();
+  if (!auto) { $('#ct').onchange = showCfg; $('#pages').oninput = warn; showCfg(); }
   $('#f').onsubmit = guard(async e => {
     e.preventDefault();
-    const pages = pageList(), ct = $('#ct').value;
+    const pages = pageList(), ct = auto ? 'manual' : $('#ct').value;
     const bad = pages.find(p => !/^https?:\/\/[^\s/]+/i.test(p));
     if (!$('#title').value.trim()) throw new Error('Add a title.');
     if (bad) throw new Error(`Not a full web address: ${bad}. Start it with https://`);
@@ -672,24 +696,21 @@ async function renderReport() {
   const reopenedEv = run ? await rows(sb.from('issue_events').select('issue_id').eq('kind', 'came_back').eq('actor', 'Weekly check').gte('at', run.started)) : [];
   const reopenedIds = new Set(reopenedEv.map(e => e.issue_id));
   const reopened = is.filter(i => reopenedIds.has(i.id));
-  const stillFailing = is.filter(i => i.check_type !== 'manual' && i.last_check_result === 'fail' && !reopenedIds.has(i.id));
-  const passingNotFixed = is.filter(i => RANK[i.status] === 1 && i.last_check_result === 'pass');
-  const couldNot = is.filter(i => i.check_type !== 'manual' && i.last_check_result === 'error');
-  const manual = sortIssues(is.filter(i => i.check_type === 'manual'));
+  const fixes = S.issues.filter(i => i.status === 'Fixed' || i.status === 'Closed');   // only fixes are rechecked
+  const couldNot = fixes.filter(i => ctype(i) !== 'manual' && i.last_check_result === 'error');
+  const manual = sortIssues(is.filter(i => i.status === 'Fixed' && ctype(i) === 'manual'));
   const stale = !run || Date.now() - new Date(run.finished) > 8 * 864e5;
   const list = (arr, extra = () => '') => arr.length ? `<ul>${arr.map(i => `<li><a href="#/issue/${i.id}">#${i.id} ${esc(i.title)}</a> ${statusBadge(i)} ${extra(i)}</li>`).join('')}</ul>` : '<p class="muted">None.</p>';
   $('#main').innerHTML = `<h2>Weekly report</h2>
-    <p class="sub">The automatic check runs every Monday morning (06:00 Pakistan time) on every issue that is not closed.</p>
+    <p class="sub">The automatic check runs every Monday morning (06:00 Pakistan time) on every issue marked Fixed or Closed. If the problem is back on the live site, the issue goes back to Open as "came back". Open and In progress issues are not checked.</p>
     ${stale ? `<div class="warn" style="margin-bottom:16px">${run ? `The weekly check has not run since ${fmtTs(run.finished)}.` : 'The weekly check has not run yet.'} Open the Actions tab of the GitHub repository to see why, or click Run workflow there to run it now.</div>` : ''}
     ${run ? `<div class="chips"><div class="chip"><b>${fmtDay(localDay(run.finished))}</b><span>Last run</span></div>
       <div class="chip"><b>${run.checked}</b><span>Checked</span></div><div class="chip"><b>${run.passed}</b><span>Passed</span></div>
       <div class="chip"><b>${run.failed}</b><span>Failed</span></div><div class="chip amber"><b>${run.reopened}</b><span>Reopened</span></div>
       <div class="chip"><b>${run.errors}</b><span>Could not check</span></div></div>` : ''}
     <div class="card"><h3>Came back in the last run</h3><p class="hint muted">Dev had fixed these. They are broken again.</p>${list(reopened, i => `<span class="muted">came back ${i.times_came_back} time${i.times_came_back === 1 ? '' : 's'}</span>`)}</div>
-    <div class="card"><h3>Still failing</h3><p class="hint muted">Not fixed yet, and the check still fails.</p>${list(stillFailing)}</div>
-    <div class="card"><h3>Check passing, not marked fixed</h3><p class="hint muted">Looks fixed on the live site. Mark it Fixed if dev has done the work.</p>${list(passingNotFixed)}</div>
     <div class="card"><h3>Could not check</h3><p class="hint muted">The site did not answer properly, so nothing was changed.</p>${list(couldNot)}</div>
-    <div class="card"><h3>Check by hand (${manual.length})</h3><p class="hint muted">Issues with no automatic check. Open each one and record the result.</p>
+    <div class="card"><h3>Check by hand (${manual.length})</h3><p class="hint muted">Fixed issues the automatic check cannot test. Open each one and record the result.</p>
       <details ${manual.length <= 15 ? 'open' : ''}><summary>Show the list</summary>
       ${list(manual, i => `${prioBadge(i)} <span class="muted">${i.last_check_at ? 'last checked ' + fmtDay(localDay(i.last_check_at)) : 'never checked'}</span>`)}</details></div>`;
 }
