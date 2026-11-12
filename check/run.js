@@ -13,7 +13,8 @@ if (!URL_ || !KEY) { console.error('Set SUPABASE_URL and SUPABASE_SERVICE_KEY.')
 async function api(path, body) {
   const res = await fetch(`${URL_}/rest/v1/${path}`, {
     method: body ? 'POST' : 'GET',
-    headers: { apikey: KEY, authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
+    // New style keys (sb_secret_...) go in the apikey header only; old style keys (eyJ...) also need the Bearer header.
+    headers: { apikey: KEY, ...(KEY.startsWith('eyJ') ? { authorization: `Bearer ${KEY}` } : {}), 'content-type': 'application/json' },
     body: body && JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
