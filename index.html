@@ -56,6 +56,12 @@
   .b-Fixed { color: var(--ok); background: var(--ok-bg); } .b-Closed { color: var(--muted); background: transparent; border: 1px solid var(--line); }
   .b-cameback { color: var(--amber-text); background: var(--amber-bg); border: 1px solid var(--amber); }
   .b-pass { color: var(--ok); background: var(--ok-bg); } .b-fail { color: var(--bad); background: var(--bad-bg); } .b-error { color: var(--muted); background: var(--grey-bg); }
+  .p-Critical { color: #fff; background: var(--bad); } .p-High { color: #fff; background: var(--blue); }
+  .p-Medium { color: var(--ip); background: var(--blue-tint); } .p-Low { color: var(--muted); background: var(--grey-bg); }
+  .audit h3 { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; } .audit .ref { font-weight: 700; color: var(--blue); }
+  .audit table { min-width: 0; } .audit tbody tr { cursor: default; } .audit tbody tr:hover { background: none; }
+  .audit td.k { width: 190px; color: var(--muted); } .audit td.v { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .audit td.code { font: 13px/1.5 Consolas, monospace; }
   .b-passing { color: var(--ok); background: #fff; border: 1px dashed var(--ok); }
   .grid2 { display: grid; grid-template-columns: 170px 1fr; gap: 6px 14px; }
   .grid2 dt { color: var(--muted); } .grid2 dd { margin: 0; overflow-wrap: anywhere; }
@@ -156,10 +162,13 @@ function describeCheck(i) {
   return 'No automatic check. Shown in the weekly "check by hand" list.';
 }
 
-// Came back first, then open work, then fixed, then closed; newest asked first within each.
+// Came back first, then open work, then fixed, then closed; within each: priority, newest asked, then the order entered.
 const RANK = { Open: 1, 'In progress': 1, Fixed: 2, Closed: 3 };
+const PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
+const prank = i => i.priority ? PRIORITIES.indexOf(i.priority) : 9;
+const prioBadge = i => i.priority ? `<span class="badge p-${i.priority}">${i.priority}</span>` : '';
 const sortIssues = list => [...list].sort((a, b) =>
-  ((b.came_back && RANK[b.status] === 1) - (a.came_back && RANK[a.status] === 1)) || (RANK[a.status] - RANK[b.status]) || b.date_asked.localeCompare(a.date_asked) || b.id - a.id);
+  ((b.came_back && RANK[b.status] === 1) - (a.came_back && RANK[a.status] === 1)) || (RANK[a.status] - RANK[b.status]) || (prank(a) - prank(b)) || b.date_asked.localeCompare(a.date_asked) || a.id - b.id);
 
 // ---------- data ----------
 async function loadAll() {
@@ -227,7 +236,7 @@ function renderPickName() {
 }
 
 // ---------- issues list ----------
-let listFilter = store.get('dit_filter') || 'active', listQ = '';
+let listFilter = store.get('dit_filter') || 'active', listQ = '', listRef = '', listPri = '';
 function renderList() {
   const is = S.issues;
   const groups = {
@@ -241,16 +250,23 @@ function renderList() {
   };
   if (!groups[listFilter]) listFilter = 'active';
   const q = listQ.toLowerCase();
-  const shown = sortIssues(is.filter(groups[listFilter][1]).filter(i => !q || (i.title + ' ' + i.description + ' ' + i.pages.join(' ')).toLowerCase().includes(q)));
+  const refs = [...new Map(is.filter(i => i.audit?.ref).map(i => [i.audit.ref, i.audit.issue])).entries()];
+  const shown = sortIssues(is.filter(groups[listFilter][1])
+    .filter(i => !listRef || (listRef === '-' ? !i.audit : i.audit?.ref === listRef))
+    .filter(i => !listPri || i.priority === listPri)
+    .filter(i => !q || (i.title + ' ' + i.description + ' ' + i.pages.join(' ')).toLowerCase().includes(q)));
   $('#main').innerHTML = `<div class="row"><h2>Issues</h2><span class="spacer"></span>${S.admin ? '<a class="btn" href="#/new">Add issue</a>' : ''}</div>
     <p class="sub">Every website issue sent to dev, with its full history. Came back issues are fixes that broke again.</p>
     <div class="chips">${Object.entries(groups).map(([k, [label, fn]]) =>
       `<button class="chip ${k === listFilter ? 'on' : ''} ${k === 'cameback' ? 'amber' : ''}" data-f="${esc(k)}"><b>${is.filter(fn).length}</b><span>${label}</span></button>`).join('')}</div>
-    <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Search title, description or page" value="${esc(listQ)}" style="flex:1;max-width:420px" aria-label="Search"></div>
-    <div class="tablewrap"><table><thead><tr><th>#</th><th>Issue</th><th>Status</th><th>Asked dev</th><th>Came back</th><th>Last fixed</th><th>Last check</th><th>Assigned</th></tr></thead>
+    <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Search title, description or page" value="${esc(listQ)}" style="flex:1;max-width:420px" aria-label="Search">
+      ${refs.length ? `<select id="fref" aria-label="Audit issue" style="max-width:340px"><option value="">All audit issues</option>${refs.map(([r, t]) => `<option value="${esc(r)}" ${r === listRef ? 'selected' : ''}>${esc(r)}: ${esc(t.slice(0, 60))}</option>`).join('')}<option value="-" ${listRef === '-' ? 'selected' : ''}>Not from the audit</option></select>` : ''}
+      <select id="fpri" aria-label="Priority"><option value="">Any priority</option>${PRIORITIES.map(p => `<option ${p === listPri ? 'selected' : ''}>${p}</option>`).join('')}</select>
+      <span class="muted">${shown.length} shown</span></div>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Issue</th><th>Priority</th><th>Status</th><th>Asked dev</th><th>Came back</th><th>Last fixed</th><th>Last check</th><th>Assigned</th></tr></thead>
     <tbody>${shown.map(i => `<tr data-id="${i.id}" class="${i.came_back && RANK[i.status] === 1 ? 'cb' : ''}">
       <td class="n">${i.id}</td><td><a href="#/issue/${i.id}">${esc(i.title)}</a>${i.pages[0] ? `<div class="muted" style="font-size:13px">${esc(i.pages[0])}${i.pages.length > 1 ? ` and ${i.pages.length - 1} more` : ''}</div>` : ''}</td>
-      <td>${statusBadge(i)}${passingBadge(i)}</td><td class="n">${fmtDay(i.date_asked)}</td>
+      <td>${prioBadge(i)}</td><td>${statusBadge(i)}${passingBadge(i)}</td><td class="n">${fmtDay(i.date_asked)}</td>
       <td class="num">${i.times_came_back ? `<b>${i.times_came_back}</b>` : '<span class="muted">0</span>'}</td>
       <td class="n">${i.last_fixed ? fmtDay(localDay(i.last_fixed)) : ''}</td>
       <td class="n">${i.check_type === 'manual' && !i.last_check_result ? '<span class="muted">By hand</span>' : resultBadge(i)}</td>
@@ -258,6 +274,8 @@ function renderList() {
     ${shown.length ? '' : `<div class="empty">${is.length ? 'Nothing matches.' : S.admin ? 'No issues yet. Click Add issue to record the first one.' : 'No issues yet.'}</div>`}</div>`;
   $('#main').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { listFilter = b.dataset.f; store.set('dit_filter', listFilter); renderList(); });
   $('#main').querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) location.hash = '#/issue/' + tr.dataset.id; });
+  if ($('#fref')) $('#fref').onchange = e => { listRef = e.target.value; renderList(); };
+  $('#fpri').onchange = e => { listPri = e.target.value; renderList(); };
   const qi = $('#q'); qi.oninput = () => { listQ = qi.value; const pos = qi.selectionStart; renderList(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
 }
 
@@ -273,15 +291,16 @@ async function renderIssue(id) {
   $('#main').innerHTML = `<p><a href="#/issues">All issues</a></p>
     <div class="row"><h2>#${i.id} ${esc(i.title)}</h2><span class="spacer"></span>
       ${S.admin ? `<a class="btn ghost" href="#/edit/${i.id}">Edit</a>${events.length <= 1 ? '<button class="btn danger" id="del">Delete</button>' : ''}` : ''}</div>
-    <p class="sub">${statusBadge(i)}${passingBadge(i)} &nbsp;Asked dev on ${fmtDay(i.date_asked)}. Fixed ${fixes} time${fixes === 1 ? '' : 's'}, came back ${i.times_came_back} time${i.times_came_back === 1 ? '' : 's'}.</p>
+    <p class="sub">${prioBadge(i)} ${statusBadge(i)}${passingBadge(i)} &nbsp;Asked dev on ${fmtDay(i.date_asked)}. Fixed ${fixes} time${fixes === 1 ? '' : 's'}, came back ${i.times_came_back} time${i.times_came_back === 1 ? '' : 's'}.</p>
     <div class="card"><dl class="grid2">
-      <dt>Description</dt><dd style="white-space:pre-wrap">${esc(i.description) || '<span class="muted">None</span>'}</dd>
+      <dt>${i.audit ? 'Fix for this item' : 'Description'}</dt><dd style="white-space:pre-wrap${/^\s*</.test(i.description) ? ';font:13px/1.5 Consolas,monospace' : ''}">${esc(i.description) || '<span class="muted">None</span>'}</dd>
       <dt>Pages</dt><dd>${i.pages.map(p => `<div><a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a></div>`).join('') || '<span class="muted">None</span>'}</dd>
       <dt>Assigned to</dt><dd>${esc(i.assigned_to || 'Nobody')}</dd>
       <dt>Last fixed</dt><dd>${i.last_fixed ? fmtTs(i.last_fixed) : '<span class="muted">Never</span>'}</dd>
       <dt>Check</dt><dd><b>${CHECKS[i.check_type]}.</b> ${esc(describeCheck(i))}</dd>
       <dt>Last check</dt><dd>${i.last_check_result ? `<span class="badge b-${i.last_check_result}">${RESULT[i.last_check_result]}</span> ${fmtTs(i.last_check_at)}${i.last_check_detail ? `<pre>${esc(i.last_check_detail)}</pre>` : ''}` : '<span class="muted">Not checked yet</span>'}</dd>
     </dl></div>
+    ${auditCard(i)}
     <div class="card"><h3>Update</h3>
       ${lockedForMe ? '<p class="muted">This issue is closed. Only the owner can reopen it.</p>' : `
       <div class="row" style="margin-bottom:12px"><label for="st"><b>Status</b></label>
@@ -318,6 +337,20 @@ async function renderIssue(id) {
   });
 }
 
+// The issue exactly as the audit spreadsheet had it: the parent issue, then every column of this row.
+function auditCard(i) {
+  const a = i.audit; if (!a) return '';
+  const row = (k, v, code) => v ? `<tr><td class="k">${esc(k)}</td><td class="v ${code ? 'code' : ''}">${esc(v)}</td></tr>` : '';
+  return `<div class="card audit"><h3><span class="ref">${esc(a.ref)}</span> ${esc(a.issue)}</h3>
+    <p class="hint muted">From the SEO audit (${esc(a.source_file)}, tab "${esc(a.tab)}", row ${a.row_no}).</p>
+    <div class="tablewrap" style="margin-bottom:14px"><table><tbody>
+      ${row('Area', a.area)}${row('What we found', a.found)}${row('Why it matters', a.why)}${row('Fix (whole issue)', a.fix)}
+      ${row('Owner (role)', a.owner)}${row('Timing', a.timing)}${row('Approval needed', a.approval)}
+    </tbody></table></div>
+    <h3>This item, as in the sheet</h3>
+    <div class="tablewrap"><table><tbody>${(a.columns || []).map(([k, v]) => row(k, v, /^\s*</.test(v))).join('')}</tbody></table></div></div>`;
+}
+
 // ---------- add / edit (owner) ----------
 function renderForm(id) {
   const i = id ? S.issues.find(x => x.id === id) : null;
@@ -332,6 +365,7 @@ function renderForm(id) {
       <label class="l" for="desc">Description</label><div><textarea id="desc" maxlength="5000" placeholder="What is wrong, and what fixed looks like">${esc(i?.description)}</textarea></div>
       <label class="l" for="pages">Pages</label><div><textarea id="pages" placeholder="https://www.curemd.com/">${esc((i?.pages || []).join('\n'))}</textarea><p class="hint">One full address per line. The check runs on every page listed.</p></div>
       <label class="l" for="asked">Date asked dev</label><div><input type="date" id="asked" value="${esc(i?.date_asked || today())}" max="${today()}" required><p class="hint">Use the real date you first asked, even if it was months ago.</p></div>
+      <label class="l" for="pri">Priority</label><select id="pri">${opt('', i?.priority || '', 'None')}${PRIORITIES.map(p => opt(p, i?.priority || '')).join('')}</select>
       <label class="l" for="asg">Assigned to</label><select id="asg">${opt('', i?.assigned_to || '', 'Nobody')}${[...new Set([...activeNames(), ...(i?.assigned_to ? [i.assigned_to] : [])])].map(n => opt(n, i?.assigned_to || '')).join('')}</select>
       <label class="l" for="ct">Automatic check</label><div>
         <select id="ct">${Object.entries(CHECKS).map(([k, v]) => opt(k, type, v)).join('')}</select>
@@ -380,7 +414,7 @@ function renderForm(id) {
     } else if (ct === 'meta') {
       cfg.field = $('#field').value; cfg.match = $('#match').value; cfg.expected = $('#expected').value.trim(); if (!cfg.expected) throw new Error('Add the expected text.');
     }
-    const p = { title: $('#title').value.trim(), description: $('#desc').value.trim(), pages, date_asked: $('#asked').value, assigned_to: $('#asg').value, check_type: ct, check_config: cfg };
+    const p = { title: $('#title').value.trim(), description: $('#desc').value.trim(), pages, date_asked: $('#asked').value, assigned_to: $('#asg').value, priority: $('#pri').value, check_type: ct, check_config: cfg };
     if (i) { await rpc('edit_issue', { p_id: i.id, p }); toast('Saved'); location.hash = '#/issue/' + i.id; }
     else { const newId = await rpc('add_issue', { p }); toast('Issue added'); location.hash = '#/issue/' + newId; }
   });
@@ -409,8 +443,9 @@ async function renderReport() {
     <div class="card"><h3>Still failing</h3><p class="hint muted">Not fixed yet, and the check still fails.</p>${list(stillFailing)}</div>
     <div class="card"><h3>Check passing, not marked fixed</h3><p class="hint muted">Looks fixed on the live site. Mark it Fixed if dev has done the work.</p>${list(passingNotFixed)}</div>
     <div class="card"><h3>Could not check</h3><p class="hint muted">The site did not answer properly, so nothing was changed.</p>${list(couldNot)}</div>
-    <div class="card"><h3>Check by hand</h3><p class="hint muted">Issues with no automatic check. Open each one and record the result.</p>
-      ${list(manual, i => `<span class="muted">${i.last_check_at ? 'last checked ' + fmtDay(localDay(i.last_check_at)) : 'never checked'}</span>`)}</div>`;
+    <div class="card"><h3>Check by hand (${manual.length})</h3><p class="hint muted">Issues with no automatic check. Open each one and record the result.</p>
+      <details ${manual.length <= 15 ? 'open' : ''}><summary>Show the list</summary>
+      ${list(manual, i => `${prioBadge(i)} <span class="muted">${i.last_check_at ? 'last checked ' + fmtDay(localDay(i.last_check_at)) : 'never checked'}</span>`)}</details></div>`;
 }
 
 // ---------- settings (owner) ----------
